@@ -4,6 +4,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.api.routes import analyze, result, stats, bookmark
 from app.core.config import settings
 
+from app.api.routes import history, dashboard
+
+app.include_router(history.router, prefix="/api", tags=["보관함"])
+app.include_router(dashboard.router, prefix="/api", tags=["대시보드"])
+
 app = FastAPI(
     title="약간동의 API",
     description="AI 기반 불공정 약관 탐지 플랫폼",

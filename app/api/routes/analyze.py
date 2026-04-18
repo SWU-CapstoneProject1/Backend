@@ -16,6 +16,7 @@ from app.services.analyze_service import (
     start_file_analysis,
 )
 from app.services.analyze_pipeline import analyze_terms_text
+from app.services.history_service import save_analysis_result
 
 # ✅ tags 제거 (핵심 수정)
 router = APIRouter(prefix="/analyze")
@@ -102,3 +103,16 @@ def analyze_file(
     start_file_analysis(db, job.id, content, file.content_type)
 
     return AnalyzeResponse(job_id=job.id, status=job.status)
+
+@router.post("", response_model=TermsAnalyzeResponse)
+def analyze_terms(request: TermsAnalyzeRequest, db: Session = Depends(get_db)):
+    result = analyze_terms_text(request.text)
+
+    save_analysis_result(
+        db,
+        result,
+        service_name="직접 입력",
+        session_key=""
+    )
+
+    return result

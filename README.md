@@ -4,6 +4,40 @@ AI 기반 불공정 약관 탐지 플랫폼
 
 ---
 
+## Tech Stack
+
+### Backend
+<img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white"/> <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white"/> <img src="https://img.shields.io/badge/SQLAlchemy-D71F00?style=flat-square&logo=sqlalchemy&logoColor=white"/>
+
+### AI / NLP
+<img src="https://img.shields.io/badge/Claude API-D97757?style=flat-square&logo=anthropic&logoColor=white"/> <img src="https://img.shields.io/badge/FAISS-0467DF?style=flat-square&logo=meta&logoColor=white"/> <img src="https://img.shields.io/badge/SentenceTransformers-FFD21E?style=flat-square&logo=huggingface&logoColor=black"/>
+
+### Data Processing
+<img src="https://img.shields.io/badge/PyMuPDF-003366?style=flat-square"/> <img src="https://img.shields.io/badge/PaddleOCR-0062B0?style=flat-square&logo=paddlepaddle&logoColor=white"/> <img src="https://img.shields.io/badge/Playwright-2EAD33?style=flat-square&logo=playwright&logoColor=white"/>
+
+---
+
+## 팀원 구성
+
+<table>
+  <tr>
+    <td align="center">정지현</td>
+    <td align="center">최유정</td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="https://github.com/jeongjihyunn.png" width="120"><br/>
+      <a href="https://github.com/jeongjihyunn">@jeongjihyunn</a>
+    </td>
+    <td align="center">
+      <img src="https://github.com/sallydeveloperr.png" width="120"><br/>
+      <a href="https://github.com/sallydeveloperr">@sallydeveloperr</a>
+    </td>
+  </tr>
+</table>
+
+---
+
 ## Overview
 
 YakganDongui는 이용약관 텍스트를 분석하여 불공정 가능성이 있는 조항을 탐지하고,  
@@ -42,24 +76,6 @@ LLM Explanation (Claude API)
         ↓
 API Response
 ```
-
----
-
-## Tech Stack
-
-### Backend
-- FastAPI
-- SQLAlchemy
-
-### AI / NLP
-- Sentence Transformers
-- FAISS
-- Claude API (Anthropic)
-
-### Data Processing
-- PyMuPDF
-- PaddleOCR
-- Playwright
 
 ---
 

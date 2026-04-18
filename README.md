@@ -1,127 +1,172 @@
-# 약간동의 (YakganDongui)
+# YakganDongui
 
-> **"전체 동의"를 누르기 전에, 약관을 약간이라도 알고 동의하세요.**
-
-AI 기반 불공정 약관 탐지 플랫폼 — 이용약관을 입력하면 불공정 조항을 자동으로 탐지하고, 공정거래위원회 심결례와 연결하여 근거 기반 분석 리포트를 제공합니다.
+AI 기반 불공정 약관 탐지 플랫폼
 
 ---
 
-## 프로젝트 소개
+## Overview
 
-이용약관은 대부분 길고 법률 용어가 많아 일반 사용자가 직접 읽고 위험성을 판단하기 어렵습니다. 소비자에게 불리한 조항이 포함되어 있어도 이를 인식하지 못한 채 동의하는 경우가 많습니다.
+YakganDongui는 이용약관 텍스트를 분석하여 불공정 가능성이 있는 조항을 탐지하고,  
+공정거래위원회 심결례를 기반으로 근거 중심의 분석 결과를 제공하는 시스템이다.
 
-**약간동의**는 이 문제를 AI로 해결합니다.
-
-약관 텍스트를 입력하면 조항 단위로 분리하여 위험도를 분류하고, 유사한 공정위 심결례를 추천하며, 쉬운 언어로 설명을 제공합니다. 단순 요약이 아니라 **근거 기반 분석**이 핵심입니다.
-
-> 공정거래위원회도 "AI 융합 약관심사 플랫폼" 구축을 추진하고 있어, 본 프로젝트는 실제 정책 흐름과 맞닿아 있습니다.
+일반 사용자가 이해하기 어려운 약관 구조를 조항 단위로 분해하고,  
+위험도를 분류한 뒤 유사 사례를 연결하여 판단을 보조하는 것을 목표로 한다.
 
 ---
 
-## 주요 기능
+## Features
 
-### 1. 약관 입력
-- **텍스트 붙여넣기** — 약관 원문 직접 입력
-- **PDF 업로드** — PyMuPDF로 텍스트 추출
-- **이미지 업로드** — PaddleOCR로 스캔 약관 처리
-- **URL 입력** — Playwright + Trafilatura로 자동 수집
-
-### 2. 분석 리포트
-- **위험도 게이지 차트** — 🔴 위험 / 🟡 주의 / 🟢 정상 조항 비율 시각화
-- **조항 하이라이트** — 위험 조항 색상 강조 + 클릭 시 상세 설명
-- **쉬운 요약** — Claude API가 법률 용어를 일반인 언어로 변환
-- **공정위 심결례 추천** — RAG 기반으로 유사 위반 사례 최대 3건 추천
-- **PDF 다운로드** — 분석 리포트 PDF 저장
-
-### 3. 보관함
-- 분석 기록 저장 및 조회
-- 위험도 등급 필터링
-- 서비스명 / 날짜 검색
+- 약관 텍스트 입력 기반 분석
+- 조항 단위 분리 및 전처리
+- 규칙 기반 위험도 분류 (HIGH / MEDIUM / LOW)
+- RAG 기반 공정위 심결례 검색
+- 조항별 설명 생성
+- FastAPI 기반 REST API 제공
 
 ---
 
-## 기술 스택
-
-### Backend
-| 분야 | 기술 |
-|---|---|
-| API 서버 | FastAPI |
-| 데이터베이스 | SQLite (개발) / PostgreSQL (배포) |
-| 비동기 작업 | Celery + Redis |
-| AI 분류 모델 | KoELECTRA (Fine-tuning) |
-| LLM 요약 | Claude API (Anthropic) |
-| RAG | LangChain + FAISS + Sentence Transformers |
-
-### Frontend
-| 분야 | 기술 |
-|---|---|
-| UI 프레임워크 | React |
-| PDF 생성 | html2canvas + jsPDF |
-
-### 데이터 수집
-| 분야 | 기술 |
-|---|---|
-| PDF 추출 | PyMuPDF |
-| 이미지 OCR | PaddleOCR |
-| 웹 크롤링 | Playwright + Trafilatura |
-| 심결례 데이터 | 국가법령정보 Open API (law.go.kr) |
-
----
-
-## 시스템 아키텍처
+## System Architecture
 
 ```
-사용자 입력 (텍스트 / PDF / 이미지 / URL)
+Input (Text / File / URL)
         ↓
-   텍스트 추출 레이어
-   PyMuPDF / PaddleOCR / Playwright
+Text Extraction (OCR / PDF / Crawling)
         ↓
-   조항 단위 분리 (Regex + SBD)
+Clause Splitter
         ↓
-   KoELECTRA 위험도 분류
-   🔴 위험 / 🟡 주의 / 🟢 정상
+Risk Classification (Rule-based → Model 확장 예정)
         ↓
-   ┌────────────┬─────────────────┐
-   │ Claude API │  RAG 심결례 검색 │
-   │ 쉬운 요약   │  FAISS + 임베딩 │
-   └────────────┴─────────────────┘
+RAG Retriever (SentenceTransformer + FAISS)
         ↓
-   분석 리포트 제공
+LLM Explanation (Claude API)
+        ↓
+API Response
 ```
 
 ---
 
-## 시작하기
+## Tech Stack
 
 ### Backend
+- FastAPI
+- SQLAlchemy
+
+### AI / NLP
+- Sentence Transformers
+- FAISS
+- Claude API (Anthropic)
+
+### Data Processing
+- PyMuPDF
+- PaddleOCR
+- Playwright
+
+---
+
+## Project Structure
+
+```
+Backend/
+├── app/
+│   ├── api/routes/
+│   │   └── analyze.py
+│   ├── services/
+│   │   ├── analyze_pipeline.py
+│   │   ├── clause_splitter.py
+│   │   ├── precedent_retriever.py
+│   │   └── llm_explainer.py
+│   ├── schemas/
+│   ├── core/
+│   └── main.py
+│
+├── data_collection/
+│   ├── collect_ftc_cases.py
+│   ├── preprocess_ftc_for_rag.py
+│   ├── build_faiss_index.py
+│   └── search_ftc_rag.py
+```
+
+---
+
+## Installation
 
 ```bash
-# 의존성 설치
+python -m venv .venv
+.venv\Scripts\activate
+
 pip install -r requirements.txt
+```
 
-# 환경변수 설정
-cp .env.example .env
-# .env 파일에 ANTHROPIC_API_KEY 입력
+### Run
 
-# DB 초기화
-python init_db.py
+```bash
+python -m uvicorn app.main:app --reload
+```
 
-# 서버 실행
-uvicorn app.main:app --reload
+Swagger UI:
+
+```
+http://127.0.0.1:8000/docs
 ```
 
 ---
 
-## 팀 소개
+## API
 
-서울여자대학교 소프트웨어융합학과 프로젝트종합설계1 약간동의팀
+### Analyze Terms (Immediate)
+
+```
+POST /api/analyze
+```
+
+**Request:**
+
+```json
+{
+  "text": "약관 전체 텍스트"
+}
+```
+
+**Response:**
+
+```json
+{
+  "summary": {
+    "total_clauses": 5,
+    "high_risk": 2,
+    "medium_risk": 1,
+    "low_risk": 2
+  },
+  "clauses": []
+}
+```
 
 ---
 
-## 관련 링크
+## Current Status
 
-- [공정거래위원회 AI 융합 약관심사 플랫폼](https://www.ftc.go.kr)
-- [ToS;DR](https://tosdr.org) — 해외 유사 서비스
-- [CLAUDETTE](https://claudette.eui.eu) — 불공정 약관 자동 탐지 연구
+| 항목 | 상태 |
+|------|------|
+| Data collection | ✅ 완료 |
+| RAG retrieval | ✅ 구현 완료 |
+| Analysis pipeline | ✅ MVP 구현 완료 |
+| API server | ✅ 구현 완료 |
+| Frontend | ⏳ 미구현 |
+| Model-based classification | 🔜 예정 |
 
 ---
+
+## Roadmap
+
+- [ ] KoELECTRA 기반 위험도 분류 모델 적용
+- [ ] 약관 도메인 데이터셋 구축
+- [ ] RAG 검색 품질 개선
+- [ ] 프론트엔드 UI 개발
+- [ ] 분석 리포트 기능 추가
+
+---
+
+## Notes
+
+- 본 프로젝트는 학술 및 연구 목적으로 개발됨
+- 일부 기능은 MVP 수준으로 구현되어 있으며 지속적으로 개선 예정

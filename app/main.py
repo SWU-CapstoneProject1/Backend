@@ -10,7 +10,7 @@ app = FastAPI(
     version="0.1.0",
 )
 
-# CORS 설정 (프론트엔드 React 연동)
+# CORS 설정
 app.add_middleware(
     CORSMiddleware,
     allow_origins=settings.ALLOWED_ORIGINS,
@@ -19,10 +19,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 라우터 등록
-app.include_router(analyze.router,  prefix="/api", tags=["분석"])
-app.include_router(result.router,   prefix="/api", tags=["결과"])
-app.include_router(stats.router,    prefix="/api", tags=["통계"])
+# 라우터 등록 (여기서만 tags 설정)
+app.include_router(analyze.router, prefix="/api", tags=["분석"])
+app.include_router(result.router, prefix="/api", tags=["결과"])
+app.include_router(stats.router, prefix="/api", tags=["통계"])
 app.include_router(bookmark.router, prefix="/api", tags=["보관함"])
 
 

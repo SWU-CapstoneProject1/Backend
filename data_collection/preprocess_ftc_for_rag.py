@@ -9,23 +9,24 @@ OUTPUT_JSONL_PATH = Path("data_collection/data/processed/rag_documents.jsonl")
 OUTPUT_JSON_PATH = Path("data_collection/data/processed/rag_documents.json")
 PREVIEW_JSON_PATH = Path("data_collection/data/processed/rag_preview.json")
 
+# 법령 참조 패턴: (법 제3조), (제5조 제1항) 등
+_LAW_REF = re.compile(r"[（\(][^）\)]*(?:법|조|항|호|규정|시행령)[^）\)]*[）\)]")
 
-def load_json(path: Path) -> Any:
-    with open(path, "r", encoding="utf-8") as f:
-        return json.load(f)
+# 쪽수 표기: - 1 -, 제1쪽, 1/10 등
+_PAGE_NUM = re.compile(r"(?:^|\n)\s*(?:-\s*\d+\s*-|제\s*\d+\s*쪽|\d+\s*/\s*\d+)\s*(?:\n|$)")
 
+# HTML 태그
+_HTML_TAG = re.compile(r"<[^>]+>")
 
-def save_json(path: Path, data: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+# 연속 특수문자: ......  ------  ======
+_REPEAT_PUNCT = re.compile(r"([.·\-=_]{3,})")
 
-
-def save_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with open(path, "w", encoding="utf-8") as f:
-        for row in rows:
-            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+# 법령 상투어 (공백 포함 정규화)
+_BOILERPLATE = re.compile(
+    r"이하\s+[\""\"]?\w+[\""\"]?\s*(?:이|라)\s*한다"
+    r"|이\s+사건\s+심결문\s*(?:은|의)"
+    r"|공정거래위원회\s+의결\s+제\d+[-–]\d+호"
+)
 
 
 def clean_text(text: Any) -> str:
@@ -34,29 +35,71 @@ def clean_text(text: Any) -> str:
 
     text = str(text)
 
-    # 줄바꿈/공백 정리
-    text = text.replace("\r", "\n")
-    text = re.sub(r"\n{3,}", "\n\n", text)
-    text = re.sub(r"[ \t]+", " ", text)
+    # HTML 태그 제거
+    text = _HTML_TAG.sub(" ", text)
+
+    # 줄바꿈 통일
+    text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+    # 전각공백·NBSP·제로폭공백 → 일반 공백
+    text = text.replace("\u3000", " ").replace("\xa0", " ").replace("\u200b", "")
+
+    # 쪽수 표기 제거
+    text = _PAGE_NUM.sub("\n", text)
+
+    # 반복 특수문자 → 단일 공백
+    text = _REPEAT_PUNCT.sub(" ", text)
+
+    # 탭 → 공백
+    text = text.replace("\t", " ")
+
+    # 같은 줄 연속 공백
+    text = re.sub(r"[ ]{2,}", " ", text)
+
+    # 줄 앞뒤 공백
     text = re.sub(r" ?\n ?", "\n", text)
 
-    # 특수 공백 정리
-    text = text.replace("\u00a0", " ").replace("\u200b", "")
+    # 3줄 이상 빈 줄 → 2줄
+    text = re.sub(r"\n{3,}", "\n\n", text)
+
+    return text.strip()
+
+
+def clean_summary(text: Any) -> str:
+    """summary 필드 전용 정제"""
+    text = clean_text(text)
+    if not text:
+        return ""
+
+    # 법령 참조 괄호 제거: (법 제3조 제1항) → 삭제
+    text = _LAW_REF.sub("", text)
+
+    # 상투어 제거
+    text = _BOILERPLATE.sub("", text)
+
+    # 중복 문장 제거 (마침표 기준 분리 후 dedup)
+    sentences = [s.strip() for s in re.split(r"(?<=[.。])\s+", text) if s.strip()]
+    seen: set = set()
+    deduped = []
+    for s in sentences:
+        if s not in seen:
+            seen.add(s)
+            deduped.append(s)
+    text = " ".join(deduped)
+
+    # 공백 재정리
+    text = re.sub(r"[ ]{2,}", " ", text)
 
     return text.strip()
 
 
 def normalize_case_name(text: str) -> str:
     text = clean_text(text)
-    # 불필요하게 띄어진 글자 조금 보정
     text = re.sub(r"\s{2,}", " ", text)
     return text.strip()
 
 
 def extract_text_fields(item: Dict[str, Any]) -> Dict[str, str]:
-    """
-    collect_ftc_cases.py에서 만든 정규화 결과를 기준으로 텍스트 필드 추출
-    """
     case_id = clean_text(item.get("case_id", ""))
     case_name = normalize_case_name(item.get("case_name", ""))
     case_number = clean_text(item.get("case_number", ""))
@@ -65,7 +108,7 @@ def extract_text_fields(item: Dict[str, Any]) -> Dict[str, str]:
     decision_number = clean_text(item.get("decision_number", ""))
     decision_date = clean_text(item.get("decision_date", ""))
 
-    summary = clean_text(item.get("summary", ""))
+    summary = clean_summary(item.get("summary", ""))
     order_text = clean_text(item.get("order_text", ""))
     reason_text = clean_text(item.get("reason_text", ""))
     full_text = clean_text(item.get("full_text", ""))
@@ -86,9 +129,6 @@ def extract_text_fields(item: Dict[str, Any]) -> Dict[str, str]:
 
 
 def build_rag_text(fields: Dict[str, str]) -> str:
-    """
-    검색과 생성에 모두 도움이 되도록 문서 텍스트를 구성
-    """
     sections = []
 
     header_lines = []
@@ -110,13 +150,10 @@ def build_rag_text(fields: Dict[str, str]) -> str:
 
     if fields["summary"]:
         sections.append(f"[결정요지]\n{fields['summary']}")
-
     if fields["order_text"]:
         sections.append(f"[주문]\n{fields['order_text']}")
-
     if fields["reason_text"]:
         sections.append(f"[이유]\n{fields['reason_text']}")
-
     if fields["full_text"]:
         sections.append(f"[본문]\n{fields['full_text']}")
 
@@ -124,9 +161,7 @@ def build_rag_text(fields: Dict[str, str]) -> str:
 
 
 def choose_best_preview_text(fields: Dict[str, str], max_len: int = 500) -> str:
-    """
-    미리보기용 짧은 텍스트
-    """
+    """미리보기용 텍스트 — 문장 경계에서 자르기"""
     candidates = [
         fields["summary"],
         fields["reason_text"],
@@ -135,36 +170,47 @@ def choose_best_preview_text(fields: Dict[str, str], max_len: int = 500) -> str:
     ]
 
     for text in candidates:
-        if text:
-            text = text[:max_len].strip()
+        if not text:
+            continue
+        if len(text) <= max_len:
             return text
+
+        # 문장 경계(마침표)에서 max_len 이내로 자르기
+        cut = text[:max_len]
+        last_period = max(cut.rfind("."), cut.rfind("。"), cut.rfind("다."))
+        if last_period > max_len // 2:
+            return cut[: last_period + 1].strip()
+        return cut.strip() + "…"
 
     return ""
 
 
+# ── 태그 키워드 맵 ───────────────────────────────────────────────────────────
+# 각 태그: (필수 키워드 중 하나라도 포함, 우선순위 가중치)
+_TAG_MAP: Dict[str, List[str]] = {
+    "면책조항": ["면책", "책임을 지지 아니", "손해를 배상하지 아니", "면제", "책임 없음"],
+    "계약해지": ["해지", "해제", "계약 종료", "일방 해지", "해약"],
+    "자동갱신": ["자동 갱신", "자동갱신", "자동으로 연장", "갱신"],
+    "과도한위약금": ["위약금", "손해배상 예정", "지체상금", "페널티"],
+    "일방적변경": ["임의로 변경", "일방적으로 변경", "변경할 수 있다", "사전 통지 없이"],
+    "소비자불리": ["고객의 책임", "회원의 책임", "이용자의 책임", "소비자 부담"],
+    "거래상지위남용": ["거래상지위", "우월적 지위", "갑의 지위", "우월한 지위"],
+    "부당광고": ["허위광고", "과장광고", "기만", "오인", "부당 표시"],
+    "공동행위": ["공동행위", "담합", "입찰 담합", "가격 담합"],
+    "가맹사업": ["가맹", "가맹점", "가맹본부", "프랜차이즈"],
+    "개인정보": ["개인정보", "정보 제공", "제3자 제공", "마케팅 활용"],
+    "재판관할": ["관할", "중재", "분쟁 해결", "소송 제기"],
+}
+
+
 def infer_unfair_clause_tags(text: str) -> List[str]:
-    """
-    아주 단순한 초기 태깅
-    이후 고도화 가능
-    """
+    """키워드 기반 불공정 유형 태그 추론"""
+    if not text:
+        return []
+
     tags = []
-    lowered = text.lower()
-
-    keyword_map = {
-        "면책": ["면책", "책임을 지지 아니", "손해를 배상하지 아니"],
-        "계약해지": ["해지", "해제", "계약 종료"],
-        "자동갱신": ["자동 갱신", "자동갱신", "갱신"],
-        "과도한위약금": ["위약금", "손해배상 예정"],
-        "일방적변경": ["일방", "임의로 변경", "변경할 수 있다"],
-        "소비자불리": ["고객의 책임", "회원의 책임", "소비자"],
-        "거래상지위남용": ["거래상지위", "우월적 지위"],
-        "부당광고": ["광고", "표시", "기만", "오인"],
-        "공동행위": ["공동행위", "담합", "입찰"],
-        "가맹사업": ["가맹", "가맹점", "가맹본부"],
-    }
-
-    for tag, keywords in keyword_map.items():
-        if any(keyword in text or keyword in lowered for keyword in keywords):
+    for tag, keywords in _TAG_MAP.items():
+        if any(kw in text for kw in keywords):
             tags.append(tag)
 
     return sorted(set(tags))
@@ -205,6 +251,24 @@ def validate_document(doc: Dict[str, Any]) -> bool:
     return True
 
 
+def load_json(path: Path) -> Any:
+    with open(path, "r", encoding="utf-8") as f:
+        return json.load(f)
+
+
+def save_json(path: Path, data: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+
+def save_jsonl(path: Path, rows: List[Dict[str, Any]]) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+
 def main() -> None:
     if not INPUT_PATH.exists():
         raise FileNotFoundError(
@@ -236,15 +300,15 @@ def main() -> None:
     save_jsonl(OUTPUT_JSONL_PATH, rag_documents)
     save_json(OUTPUT_JSON_PATH, rag_documents)
 
-    preview_data = []
-    for doc in rag_documents[:5]:
-        preview_data.append({
+    preview_data = [
+        {
             "id": doc["id"],
             "title": doc["title"],
             "preview": doc["preview"],
             "metadata": doc["metadata"],
-        })
-
+        }
+        for doc in rag_documents[:5]
+    ]
     save_json(PREVIEW_JSON_PATH, preview_data)
 
     print("전처리 완료")

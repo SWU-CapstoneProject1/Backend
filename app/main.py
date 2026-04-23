@@ -1,5 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from app.api.routes import analyze, result, stats, bookmark
 from app.core.config import settings
@@ -9,6 +11,34 @@ app = FastAPI(
     description="AI 기반 불공정 약관 탐지 플랫폼",
     version="0.1.0",
 )
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = [
+        {"field": ".".join(str(loc) for loc in err["loc"]), "message": err["msg"]}
+        for err in exc.errors()
+    ]
+    return JSONResponse(
+        status_code=422,
+        content={"error": "validation_error", "detail": errors, "status_code": 422},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": "http_error", "detail": exc.detail, "status_code": exc.status_code},
+    )
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    return JSONResponse(
+        status_code=500,
+        content={"error": "internal_server_error", "detail": "서버 내부 오류가 발생했습니다", "status_code": 500},
+    )
 
 # CORS 설정
 app.add_middleware(

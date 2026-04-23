@@ -40,7 +40,7 @@ def start_text_analysis(db: Session, job_id: str, text: str):
     """
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
-        return
+        raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
     job.status = JobStatus.running
     db.commit()
@@ -85,7 +85,7 @@ def start_url_analysis(db: Session, job_id: str, url: str):
     """
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
-        return
+        raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
     # Mock: URL 분석은 추후 구현
     job.status = JobStatus.failed
@@ -102,7 +102,7 @@ def start_file_analysis(db: Session, job_id: str, content: bytes, content_type: 
     """
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
-        return
+        raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
     # Mock: 파일 분석은 추후 구현
     job.status = JobStatus.failed

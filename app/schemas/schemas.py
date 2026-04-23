@@ -1,7 +1,17 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
+
+
+# ────────────────────────────────────────────────
+# 공통 에러 응답
+# ────────────────────────────────────────────────
+
+class ErrorResponse(BaseModel):
+    error: str
+    detail: Any
+    status_code: int
 
 
 class RiskLevel(str, Enum):

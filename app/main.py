@@ -3,7 +3,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
-from app.api.routes import analyze, result, stats, bookmark
+from app.api.routes import analyze, result, stats, bookmark, report
 from app.core.config import settings
 
 app = FastAPI(
@@ -54,6 +54,7 @@ app.include_router(analyze.router, prefix="/api", tags=["분석"])
 app.include_router(result.router, prefix="/api", tags=["결과"])
 app.include_router(stats.router, prefix="/api", tags=["통계"])
 app.include_router(bookmark.router, prefix="/api", tags=["보관함"])
+app.include_router(report.router, prefix="/api", tags=["리포트"])
 
 
 @app.get("/")

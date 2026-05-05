@@ -179,8 +179,16 @@ def analyze_terms_text(terms_text: str) -> Dict:
         })
 
     total = len(clauses)
-    overall_score = stats["HIGH"] * 3 + stats["MEDIUM"] * 2 + stats["LOW"] * 1
-    overall_risk_ratio = round(overall_score / (total * 3), 2) if total > 0 else 0.0
+    # 가중치 방식: 위험×3 + 주의×1 / 전체×3 × 100
+    weighted = stats["HIGH"] * 3 + stats["MEDIUM"] * 1
+    risk_score = round(weighted / (total * 3) * 100, 1) if total > 0 else 0.0
+
+    if risk_score >= 61:
+        risk_grade = "위험"
+    elif risk_score >= 31:
+        risk_grade = "주의"
+    else:
+        risk_grade = "안전"
 
     return {
         "summary": {
@@ -188,7 +196,9 @@ def analyze_terms_text(terms_text: str) -> Dict:
             "high_risk": stats["HIGH"],
             "medium_risk": stats["MEDIUM"],
             "low_risk": stats["LOW"],
-            "overall_risk_ratio": overall_risk_ratio,
+            "overall_risk_ratio": round(risk_score / 100, 2),
+            "risk_score": risk_score,
+            "risk_grade": risk_grade,
         },
         "clauses": analyzed,
     }

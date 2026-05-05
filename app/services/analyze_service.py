@@ -54,8 +54,9 @@ def start_text_analysis(db: Session, job_id: str, text: str):
     safe_count    = sum(1 for c in mock_clauses if c["risk_level"] == RiskLevel.safe)
     total         = len(mock_clauses) or 1
 
-    # 위험도 점수: 단순 비율 방식 (기능명세서 확정값)
-    risk_score = (danger_count / total) * 100
+    # 위험도 점수: 가중치 방식 (위험×3 + 주의×1) / (전체×3) × 100
+    weighted  = danger_count * 3 + caution_count * 1
+    risk_score = round(weighted / (total * 3) * 100, 1)
 
     for i, clause in enumerate(mock_clauses):
         db.add(Clause(

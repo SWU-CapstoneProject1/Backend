@@ -183,7 +183,9 @@ class TermsAnalyzeSummary(BaseModel):
     high_risk: int
     medium_risk: int
     low_risk: int
-    overall_risk_ratio: float
+    overall_risk_ratio: float   # 0.0 ~ 1.0 (프론트 게이지용)
+    risk_score: float = 0.0     # 0 ~ 100점
+    risk_grade: str = "안전"    # 안전 / 주의 / 위험
 
 
 class TermsAnalyzeResponse(BaseModel):

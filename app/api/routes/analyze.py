@@ -81,16 +81,18 @@ def analyze_text(req: AnalyzeTextRequest, db: Session = Depends(get_db)):
     summary="URL 입력 분석 작업 시작",
 )
 def analyze_url(req: AnalyzeUrlRequest, db: Session = Depends(get_db)):
+    job = create_analysis_job(
+        db,
+        input_type="url",
+        input_value=str(req.url),
+        session_key=req.session_key or "",
+    )
     try:
-        job = create_analysis_job(
-            db,
-            input_type="url",
-            input_value=str(req.url),
-            session_key=req.session_key or "",
-        )
         start_url_analysis(db, job.id, str(req.url))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception:
-        raise HTTPException(status_code=500, detail="분석 작업 생성 중 오류가 발생했습니다")
+        raise HTTPException(status_code=500, detail="URL 분석 중 오류가 발생했습니다")
 
     return AnalyzeResponse(job_id=job.id, status=job.status)
 
@@ -118,15 +120,19 @@ def analyze_file(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="빈 파일은 업로드할 수 없습니다")
 
+    job = create_analysis_job(
+        db,
+        input_type="file",
+        input_value=file.filename or "",
+        session_key=session_key,
+    )
     try:
-        job = create_analysis_job(
-            db,
-            input_type="file",
-            input_value=file.filename or "",
-            session_key=session_key,
-        )
         start_file_analysis(db, job.id, content, file.content_type)
+    except NotImplementedError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
     except Exception:
-        raise HTTPException(status_code=500, detail="분석 작업 생성 중 오류가 발생했습니다")
+        raise HTTPException(status_code=500, detail="파일 분석 중 오류가 발생했습니다")
 
     return AnalyzeResponse(job_id=job.id, status=job.status)

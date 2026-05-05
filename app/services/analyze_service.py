@@ -76,37 +76,39 @@ def start_text_analysis(db: Session, job_id: str, text: str):
 
 
 def start_url_analysis(db: Session, job_id: str, url: str):
-    """
-    URL 크롤링 후 분석
-    TODO:
-      1. Playwright로 페이지 렌더링
-      2. Trafilatura로 본문 추출
-      3. start_text_analysis() 호출
-    """
+    """URL 크롤링 후 약관 텍스트 추출 → 분석"""
+    from app.services.url_extractor import extract_text_from_url
+
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
         raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
-    # Mock: URL 분석은 추후 구현
-    job.status = JobStatus.failed
-    db.commit()
+    try:
+        text = extract_text_from_url(url)
+    except ValueError as e:
+        job.status = JobStatus.failed
+        db.commit()
+        raise e
+
+    start_text_analysis(db, job_id, text)
 
 
 def start_file_analysis(db: Session, job_id: str, content: bytes, content_type: str):
-    """
-    PDF/이미지 파일 분석
-    TODO:
-      - PDF: PyMuPDF 텍스트 추출
-      - 이미지: PaddleOCR 텍스트 추출
-      - 추출 후 start_text_analysis() 호출
-    """
+    """파일에서 약관 텍스트 추출 → 분석 (PDF 지원, 이미지 미지원)"""
+    from app.services.file_extractor import extract_text_from_file
+
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
         raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
-    # Mock: 파일 분석은 추후 구현
-    job.status = JobStatus.failed
-    db.commit()
+    try:
+        text = extract_text_from_file(content, content_type)
+    except (ValueError, NotImplementedError) as e:
+        job.status = JobStatus.failed
+        db.commit()
+        raise e
+
+    start_text_analysis(db, job_id, text)
 
 
 def _mock_classify(text: str) -> list[dict]:

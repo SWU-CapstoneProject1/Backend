@@ -1,7 +1,17 @@
 from enum import Enum
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import BaseModel, Field, HttpUrl
+
+
+# ────────────────────────────────────────────────
+# 공통 에러 응답
+# ────────────────────────────────────────────────
+
+class ErrorResponse(BaseModel):
+    error: str
+    detail: Any
+    status_code: int
 
 
 class RiskLevel(str, Enum):
@@ -173,7 +183,9 @@ class TermsAnalyzeSummary(BaseModel):
     high_risk: int
     medium_risk: int
     low_risk: int
-    overall_risk_ratio: float
+    overall_risk_ratio: float   # 0.0 ~ 1.0 (프론트 게이지용)
+    risk_score: float = 0.0     # 0 ~ 100점
+    risk_grade: str = "안전"    # 안전 / 주의 / 위험
 
 
 class TermsAnalyzeResponse(BaseModel):

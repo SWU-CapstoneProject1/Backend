@@ -7,7 +7,7 @@ DB 테이블 생성 스크립트
 from app.core.database import engine, Base
 
 # 기존 모델
-from app.models.models import AnalysisJob, Clause, Precedent, ServiceStats
+from app.models.models import AnalysisJob, Clause, Precedent, ServiceStats, Bookmark
 
 # 새로 추가한 모델
 from app.models.analysis import AnalysisResult

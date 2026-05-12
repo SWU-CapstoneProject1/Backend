@@ -76,3 +76,13 @@ class ServiceStats(Base):
     total_danger    = Column(Integer, default=0)         # 누적 위험 조항 수
     total_services  = Column(Integer, default=0)         # 분석된 서비스 수
     updated_at      = Column(DateTime, server_default=func.now())
+
+
+class Bookmark(Base):
+    """사용자 보관함 테이블"""
+    __tablename__ = "bookmarks"
+
+    id          = Column(String, primary_key=True, default=generate_uuid)
+    job_id      = Column(String, index=True)
+    session_key = Column(String, index=True)
+    created_at  = Column(DateTime, server_default=func.now())

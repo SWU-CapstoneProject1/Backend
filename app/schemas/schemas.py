@@ -138,6 +138,8 @@ class BookmarkResponse(BaseModel):
 
 class TermsAnalyzeRequest(BaseModel):
     text: str
+    service_name: Optional[str] = ""
+    session_key: Optional[str] = ""
 
     class Config:
         json_schema_extra = {
@@ -147,7 +149,9 @@ class TermsAnalyzeRequest(BaseModel):
                     "회사는 회원에게 발생한 손해에 대해 책임지지 않습니다.\n\n"
                     "제2조(약관 변경)\n"
                     "회사는 사전 통지 없이 약관을 변경할 수 있습니다."
-                )
+                ),
+                "service_name": "넷플릭스",
+                "session_key": "uuid-xxxx",
             }
         }
 
@@ -189,5 +193,6 @@ class TermsAnalyzeSummary(BaseModel):
 
 
 class TermsAnalyzeResponse(BaseModel):
+    job_id: Optional[str] = None
     summary: TermsAnalyzeSummary
     clauses: List[ClauseAnalysisResult] = Field(default_factory=list)

@@ -10,6 +10,15 @@ load_dotenv()
 ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
 
 
+def _has_valid_api_key() -> bool:
+    key = ANTHROPIC_API_KEY.strip()
+    if not key:
+        return False
+    if key.startswith("여기에_") or key.lower() in {"your_api_key", "changeme", "none"}:
+        return False
+    return True
+
+
 def build_prompt(
     clause_text: str,
     risk_result: Dict,
@@ -60,7 +69,7 @@ def build_prompt(
 
 
 def call_claude_json(prompt: str) -> Optional[Dict]:
-    if not ANTHROPIC_API_KEY:
+    if not _has_valid_api_key():
         return None
 
     url = "https://api.anthropic.com/v1/messages"

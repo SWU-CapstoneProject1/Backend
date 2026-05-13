@@ -1,11 +1,14 @@
-"""
-분석 서비스 레이어
-현재: Mock 데이터 반환 (AI 모델 연동 전 뼈대)
-추후: KoELECTRA 분류 + Claude API 요약 + RAG 심결례 추천 연동
-"""
 from sqlalchemy.orm import Session
 
 from app.models.models import AnalysisJob, Clause, JobStatus, RiskLevel
+
+
+def _to_db_risk_level(level: str) -> RiskLevel:
+    if level == "HIGH":
+        return RiskLevel.danger
+    if level == "MEDIUM":
+        return RiskLevel.caution
+    return RiskLevel.safe
 
 
 def create_analysis_job(
@@ -30,14 +33,10 @@ def create_analysis_job(
 
 
 def start_text_analysis(db: Session, job_id: str, text: str):
-    """
-    텍스트 분석 실행
-    TODO: 실제 AI 파이프라인 연동
-      1. 조항 단위 분리 (Regex + SBD)
-      2. KoELECTRA 위험도 분류
-      3. Claude API 쉬운 요약 생성 (lazy)
-      4. RAG 심결례 추천
-    """
+    """텍스트 분석 실행 후 DB에 결과 저장"""
+    from app.services.analyze_pipeline import analyze_terms_text
+    from app.services.history_service import save_analysis_result
+
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
         raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
@@ -45,35 +44,39 @@ def start_text_analysis(db: Session, job_id: str, text: str):
     job.status = JobStatus.running
     db.commit()
 
-    # ── Mock 분석 결과 ──────────────────────────────
-    # 실제 KoELECTRA 모델 연동 전 임시 데이터
-    mock_clauses = _mock_classify(text)
+    try:
+        result = analyze_terms_text(text)
+    except Exception:
+        job.status = JobStatus.failed
+        db.commit()
+        raise
 
-    danger_count  = sum(1 for c in mock_clauses if c["risk_level"] == RiskLevel.danger)
-    caution_count = sum(1 for c in mock_clauses if c["risk_level"] == RiskLevel.caution)
-    safe_count    = sum(1 for c in mock_clauses if c["risk_level"] == RiskLevel.safe)
-    total         = len(mock_clauses) or 1
+    summary = result["summary"]
 
-    # 위험도 점수: 가중치 방식 (위험×3 + 주의×1) / (전체×3) × 100
-    weighted  = danger_count * 3 + caution_count * 1
-    risk_score = round(weighted / (total * 3) * 100, 1)
-
-    for i, clause in enumerate(mock_clauses):
+    db.query(Clause).filter(Clause.job_id == job_id).delete()
+    for i, clause in enumerate(result.get("clauses", [])):
         db.add(Clause(
             job_id=job_id,
             index=i,
-            original=clause["text"],
-            risk_level=clause["risk_level"],
-            summary="",  # lazy 생성 — 리포트 화면 진입 시 Claude API 호출
+            original=clause.get("content", ""),
+            risk_level=_to_db_risk_level(clause.get("risk_level", "LOW")),
+            summary=clause.get("llm_summary") or clause.get("plain_explanation", ""),
         ))
 
-    job.status        = JobStatus.done
-    job.risk_score    = round(risk_score, 1)
-    job.danger_count  = danger_count
-    job.caution_count = caution_count
-    job.safe_count    = safe_count
+    job.status = JobStatus.done
+    job.risk_score = summary.get("risk_score", 0.0)
+    job.danger_count = summary.get("high_risk", 0)
+    job.caution_count = summary.get("medium_risk", 0)
+    job.safe_count = summary.get("low_risk", 0)
     db.commit()
-    # ── Mock 끝 ────────────────────────────────────
+
+    save_analysis_result(
+        db,
+        result,
+        service_name=job.service_name or "",
+        session_key=job.session_key or "",
+        job_id=job_id,
+    )
 
 
 def start_url_analysis(db: Session, job_id: str, url: str):
@@ -104,7 +107,7 @@ def start_file_analysis(db: Session, job_id: str, content: bytes, content_type: 
 
     try:
         text = extract_text_from_file(content, content_type)
-    except (ValueError, NotImplementedError) as e:
+    except Exception as e:
         job.status = JobStatus.failed
         db.commit()
         raise e

@@ -1,4 +1,6 @@
 import json
+import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -49,7 +51,14 @@ class FTCRetriever:
         self.config = load_json(CONFIG_PATH)
 
         self.model_name = self.config["model_name"]
-        self.model = SentenceTransformer(self.model_name)
+        self.model = None
+        use_semantic = os.getenv("USE_SEMANTIC_RAG", "").lower() in {"1", "true", "yes"}
+        allow_download = os.getenv("ALLOW_MODEL_DOWNLOAD", "").lower() in {"1", "true", "yes"}
+        if use_semantic:
+            try:
+                self.model = SentenceTransformer(self.model_name, local_files_only=not allow_download)
+            except Exception:
+                self.model = None
 
         self.row_by_faiss_id: Dict[int, Dict[str, Any]] = {}
         for row in self.metadata_rows:
@@ -57,10 +66,43 @@ class FTCRetriever:
 
         self._initialized = True
 
+    def _keyword_search(self, query: str, top_k: int) -> List[Dict[str, Any]]:
+        keywords = set(re.findall(r"[가-힣A-Za-z0-9]{2,}", query))
+        if not keywords:
+            return []
+
+        scored: List[Dict[str, Any]] = []
+        for row in self.metadata_rows:
+            haystack = " ".join([
+                row.get("title", ""),
+                row.get("preview", ""),
+                row.get("text", ""),
+                " ".join(row.get("metadata", {}).get("tags", [])),
+            ])
+            matched = sum(1 for keyword in keywords if keyword in haystack)
+            if matched == 0:
+                continue
+
+            score = min(1.0, matched / max(len(keywords), 1))
+            scored.append({
+                "score": score,
+                "id": row["id"],
+                "title": row["title"],
+                "preview": row.get("preview", ""),
+                "metadata": row.get("metadata", {}),
+                "text": row.get("text", ""),
+            })
+
+        scored.sort(key=lambda item: item["score"], reverse=True)
+        return scored[:top_k]
+
     def search(self, query: str, top_k: int = 5) -> List[Dict[str, Any]]:
         query = query.strip()
         if not query:
             return []
+
+        if self.model is None:
+            return self._keyword_search(query, top_k)
 
         query_embedding = self.model.encode(
             [query],

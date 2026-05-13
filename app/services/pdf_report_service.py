@@ -4,6 +4,7 @@ PyMuPDF 내장 CJK 폰트 사용 (별도 폰트 파일 불필요)
 """
 import io
 from datetime import datetime
+from pathlib import Path
 from typing import Optional
 
 import fitz  # PyMuPDF
@@ -24,7 +25,15 @@ MARGIN   = 50
 WIDTH    = 595   # A4
 HEIGHT   = 842   # A4
 LINE_H   = 18    # 기본 줄 간격
-FONT     = "cjk" # PyMuPDF 내장 CJK 폰트
+FONT_FILE = Path("C:/Windows/Fonts/malgun.ttf")
+FONT     = "malgun" if FONT_FILE.exists() else "helv"
+
+
+def _font_kwargs():
+    kwargs = {"fontname": FONT}
+    if FONT_FILE.exists():
+        kwargs["fontfile"] = str(FONT_FILE)
+    return kwargs
 
 
 def _risk_color(risk_level: str):
@@ -62,9 +71,9 @@ class PDFWriter:
         self.page.insert_text(
             (x, self.y),
             txt,
-            fontname=FONT,
             fontsize=size,
             color=color,
+            **_font_kwargs(),
         )
         self.y += size + 6
 
@@ -87,9 +96,9 @@ class PDFWriter:
         self.page.insert_text(
             (MARGIN + 6, self.y + size),
             txt,
-            fontname=FONT,
             fontsize=size,
             color=text_color,
+            **_font_kwargs(),
         )
         self.y += size + 14
 
@@ -101,9 +110,9 @@ class PDFWriter:
         self.page.insert_text(
             (x + 4, self.y + y_offset),
             label,
-            fontname=FONT,
             fontsize=9,
             color=(1, 1, 1),
+            **_font_kwargs(),
         )
         return x + w + 6
 
@@ -155,7 +164,7 @@ def generate_pdf_report(result: ResultResponse) -> bytes:
         badge_x = MARGIN + len(header) * 8 + 4
         rect = fitz.Rect(badge_x, badge_y - 2, badge_x + 36, badge_y + 12)
         w.page.draw_rect(rect, color=None, fill=text_color)
-        w.page.insert_text((badge_x + 4, badge_y + 9), label, fontname=FONT, fontsize=9, color=(1, 1, 1))
+        w.page.insert_text((badge_x + 4, badge_y + 9), label, fontsize=9, color=(1, 1, 1), **_font_kwargs())
 
         # 원문 (배경색 박스)
         original = clause.original[:200] + ("..." if len(clause.original) > 200 else "")

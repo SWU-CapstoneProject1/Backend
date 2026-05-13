@@ -1,4 +1,5 @@
 import uuid
+from urllib.parse import quote
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import Response
@@ -39,9 +40,10 @@ def download_pdf_report(job_id: str, db: Session = Depends(get_db)):
 
     service_name = result.service_name or "report"
     filename = f"yakgandongui_{service_name}_{job_id[:8]}.pdf"
+    encoded_filename = quote(filename)
 
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{filename}"},
+        headers={"Content-Disposition": f"attachment; filename*=UTF-8''{encoded_filename}"},
     )

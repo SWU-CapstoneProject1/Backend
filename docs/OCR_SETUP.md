@@ -24,6 +24,8 @@ TESSDATA_DIR=ocr/tessdata
 OCR_LANGUAGE=kor+eng
 OCR_PSM=6
 OCR_MIN_TEXT_LENGTH=20
+OCR_PDF_MAX_PAGES=20
+OCR_PDF_DPI=200
 ```
 
 If Korean OCR data is missing, use `OCR_LANGUAGE=eng` temporarily or install `kor.traineddata`.
@@ -32,6 +34,16 @@ When Windows blocks writes to `C:/Program Files/Tesseract-OCR/tessdata`, place `
 `ocr/tessdata` and keep `TESSDATA_DIR=ocr/tessdata`.
 
 For the current official `kor.traineddata`, Tesseract may also request `chi_tra.traineddata`.
+
+## PDF OCR Behavior
+
+Text-based PDFs are handled first with PyMuPDF text extraction. If a PDF has no extractable text,
+the backend renders up to `OCR_PDF_MAX_PAGES` pages as images and runs Tesseract OCR on those pages.
+Increase `OCR_PDF_MAX_PAGES` only when long scanned PDFs are expected, because each page adds OCR time.
+
+OCR output is rejected when it is too short or mostly numeric/symbol noise. If Korean OCR returns
+garbled digits, verify that `kor.traineddata` and any requested helper data such as
+`chi_tra.traineddata` exist under `TESSDATA_DIR`, then test with real screenshots or scanned PDFs.
 
 ## Frontend Upload Shape
 

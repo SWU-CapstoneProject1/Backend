@@ -1,6 +1,7 @@
 import re
 from typing import Dict, List
 
+from app.core.config import settings
 from app.services.clause_splitter import split_clauses
 from app.services.precedent_retriever import FTCRetriever
 from app.services.llm_explainer import generate_llm_explanation
@@ -126,6 +127,23 @@ def rerank_cases(clause_text: str, cases: List[Dict]) -> List[Dict]:
     return reranked[:3]
 
 
+def filter_cases_by_similarity(cases: List[Dict], min_similarity: float | None = None) -> List[Dict]:
+    threshold = settings.PRECEDENT_MIN_SIMILARITY if min_similarity is None else min_similarity
+    if threshold <= 0:
+        return cases
+
+    filtered = []
+    for case in cases:
+        score = case.get("reranked_score", case.get("score", 0.0))
+        try:
+            score = float(score)
+        except (TypeError, ValueError):
+            score = 0.0
+        if score >= threshold:
+            filtered.append(case)
+    return filtered
+
+
 def analyze_terms_text(terms_text: str) -> Dict:
     retriever = FTCRetriever()
     clauses = split_clauses(terms_text)
@@ -143,7 +161,7 @@ def analyze_terms_text(terms_text: str) -> Dict:
         else:
             retrieved = retriever.search(text, top_k=8)
 
-        reranked = rerank_cases(text, retrieved)
+        reranked = filter_cases_by_similarity(rerank_cases(text, retrieved))
 
         llm_result = generate_llm_explanation(
             clause_text=text,

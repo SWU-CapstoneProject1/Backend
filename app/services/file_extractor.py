@@ -35,26 +35,23 @@ def extract_text_from_pdf(content: bytes) -> str:
     except Exception as exc:
         raise ValueError("PDF 파일을 열 수 없습니다. 파일이 손상되었는지 확인해주세요.") from exc
 
-    if doc.page_count == 0:
-        raise ValueError("PDF에 페이지가 없습니다.")
+    try:
+        if doc.page_count == 0:
+            raise ValueError("PDF에 페이지가 없습니다.")
 
-    pages_text: list[str] = []
-    for page_num in range(min(doc.page_count, MAX_PAGES)):
-        page = doc[page_num]
-        text = page.get_text("text")
-        if text.strip():
-            pages_text.append(text)
+        raw = _extract_text_from_pdf_pages(doc)
+        if len(raw.strip()) >= 50:
+            return raw[:MAX_TEXT_LENGTH]
 
-    doc.close()
+        ocr_text = _extract_text_from_scanned_pdf(doc)
+        if _is_ocr_text_usable(ocr_text, min_length=50):
+            return ocr_text[:MAX_TEXT_LENGTH]
+    finally:
+        doc.close()
 
-    if not pages_text:
-        raise ValueError("PDF에서 텍스트를 추출하지 못했습니다. 이미지 PDF라면 이미지 OCR로 업로드해주세요.")
-
-    raw = _clean_text("\n\n".join(pages_text))
-    if len(raw.strip()) < 50:
+    if raw.strip():
         raise ValueError("PDF에서 추출된 텍스트가 너무 짧습니다.")
-
-    return raw[:MAX_TEXT_LENGTH]
+    raise ValueError("PDF에서 분석 가능한 약관 텍스트를 충분히 추출하지 못했습니다.")
 
 
 def extract_text_from_image(content: bytes, content_type: str) -> str:
@@ -67,7 +64,7 @@ def extract_text_from_image(content: bytes, content_type: str) -> str:
     text = _clean_text(raw)
 
     min_length = max(10, getattr(settings, "OCR_MIN_TEXT_LENGTH", 20))
-    if len(text) < min_length:
+    if not _is_ocr_text_usable(text, min_length=min_length):
         raise ValueError("이미지에서 분석 가능한 약관 텍스트를 충분히 추출하지 못했습니다.")
 
     return text[:MAX_TEXT_LENGTH]
@@ -80,6 +77,50 @@ def extract_text_from_file(content: bytes, content_type: str) -> str:
     if normalized_content_type in SUPPORTED_IMAGE_CONTENT_TYPES:
         return extract_text_from_image(content, normalized_content_type)
     raise ValueError(f"지원하지 않는 파일 형식입니다: {content_type}")
+
+
+def _is_ocr_text_usable(text: str, min_length: int) -> bool:
+    normalized = text.strip()
+    if len(normalized) < min_length:
+        return False
+
+    readable_chars = re.findall(r"[가-힣A-Za-z]", normalized)
+    return len(readable_chars) >= min(10, min_length)
+
+
+def _extract_text_from_pdf_pages(doc: fitz.Document) -> str:
+    pages_text: list[str] = []
+    for page_num in range(min(doc.page_count, MAX_PAGES)):
+        page = doc[page_num]
+        text = page.get_text("text")
+        if text.strip():
+            pages_text.append(text)
+    return _clean_text("\n\n".join(pages_text))
+
+
+def _extract_text_from_scanned_pdf(doc: fitz.Document) -> str:
+    page_limit = min(
+        doc.page_count,
+        MAX_PAGES,
+        max(1, getattr(settings, "OCR_PDF_MAX_PAGES", 20)),
+    )
+    dpi = min(300, max(72, getattr(settings, "OCR_PDF_DPI", 200)))
+    matrix = fitz.Matrix(dpi / 72, dpi / 72)
+
+    pages_text: list[str] = []
+    for page_num in range(page_limit):
+        page = doc[page_num]
+        pixmap = page.get_pixmap(matrix=matrix, alpha=False)
+        with Image.open(BytesIO(pixmap.tobytes("png"))) as img:
+            img.load()
+            image = img.convert("RGB")
+
+        image = _prepare_image_for_ocr(image)
+        text = _run_tesseract_ocr(image)
+        if text.strip():
+            pages_text.append(text)
+
+    return _clean_text("\n\n".join(pages_text))
 
 
 def _open_image(content: bytes) -> Image.Image:
@@ -122,7 +163,7 @@ def _run_tesseract_ocr(image: Image.Image) -> str:
     config = f"--oem 3 --psm {psm}"
     tessdata_dir = _resolve_tessdata_dir()
     if tessdata_dir:
-        config = f'{config} --tessdata-dir "{tessdata_dir}"'
+        config = f"{config} --tessdata-dir {tessdata_dir}"
 
     try:
         return pytesseract.image_to_string(image, lang=language, config=config)
@@ -183,8 +224,6 @@ def _resolve_tessdata_dir() -> str | None:
         return None
 
     path = Path(configured)
-    if not path.is_absolute():
-        path = path.resolve()
     if not path.exists():
         raise OcrUnavailableError(f"TESSDATA_DIR 경로를 찾을 수 없습니다: {path}")
     return str(path)

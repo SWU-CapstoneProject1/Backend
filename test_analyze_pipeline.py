@@ -3,7 +3,7 @@ import json
 from app.services.analyze_pipeline import analyze_terms_text
 
 
-sample_terms = """
+SAMPLE_TERMS = """
 제1조(목적)
 본 약관은 회사가 제공하는 서비스의 이용과 관련한 조건을 정합니다.
 
@@ -21,5 +21,11 @@ sample_terms = """
 이미 결제된 금액은 어떠한 경우에도 환불되지 않습니다.
 """
 
-result = analyze_terms_text(sample_terms)
-print(json.dumps(result, ensure_ascii=False, indent=2))
+
+def main() -> None:
+    result = analyze_terms_text(SAMPLE_TERMS)
+    print(json.dumps(result, ensure_ascii=False, indent=2))
+
+
+if __name__ == "__main__":
+    main()

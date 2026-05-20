@@ -7,8 +7,14 @@
 # 환경변수
 # ================================
 .env
+.env.*
 .env.local
 .env.production
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
 
 # ================================
 # 데이터 (RAG, 크롤링 결과)
@@ -48,7 +54,9 @@ env/
 # ================================
 uploads/
 tmp/
+tmp_pdf_pages/
 ocr/tessdata/
+*.traineddata
 
 # ================================
 # 모델 파일 (future)
@@ -66,6 +74,8 @@ logs/
 # HuggingFace cache
 # ================================
 .cache/
+.huggingface/
+hf_cache/
 
 # ================================
 # IDE

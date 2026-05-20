@@ -1,9 +1,9 @@
 import mimetypes
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Request, UploadFile
 from sqlalchemy.orm import Session
 
-from app.core.database import get_db
+from app.core.database import SessionLocal, get_db
 from app.schemas.schemas import (
     AnalyzeResponse,
     AnalyzeTextRequest,
@@ -25,13 +25,45 @@ router = APIRouter(prefix="/analyze")
 ALLOWED_FILE_CONTENT_TYPES = {"application/pdf", *SUPPORTED_IMAGE_CONTENT_TYPES}
 
 
+# ────────────────────────────────────────────────
+# 백그라운드 태스크 래퍼 (새 DB 세션 생성)
+# ────────────────────────────────────────────────
+
+def _bg_text_analysis(job_id: str, text: str) -> None:
+    db = SessionLocal()
+    try:
+        start_text_analysis(db, job_id, text)
+    finally:
+        db.close()
+
+
+def _bg_url_analysis(job_id: str, url: str) -> None:
+    db = SessionLocal()
+    try:
+        start_url_analysis(db, job_id, url)
+    finally:
+        db.close()
+
+
+def _bg_file_analysis(job_id: str, content: bytes, content_type: str) -> None:
+    db = SessionLocal()
+    try:
+        start_file_analysis(db, job_id, content, content_type)
+    finally:
+        db.close()
+
+
+# ────────────────────────────────────────────────
+# 엔드포인트
+# ────────────────────────────────────────────────
+
 @router.post(
     "/text",
     response_model=AnalyzeResponse,
     responses={400: {"description": "입력값 오류"}, 500: {"description": "분석 작업 생성 실패"}},
     summary="텍스트 직접 입력 분석 작업 시작",
 )
-def analyze_text(req: AnalyzeTextRequest, db: Session = Depends(get_db)):
+def analyze_text(req: AnalyzeTextRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from app.core.config import settings
 
     text = req.text.strip()
@@ -48,10 +80,10 @@ def analyze_text(req: AnalyzeTextRequest, db: Session = Depends(get_db)):
             service_name=req.service_name or "",
             session_key=req.session_key or "",
         )
-        start_text_analysis(db, job.id, text)
     except Exception as exc:
         raise HTTPException(status_code=500, detail="분석 작업 생성 중 오류가 발생했습니다.") from exc
 
+    background_tasks.add_task(_bg_text_analysis, job.id, text)
     return AnalyzeResponse(job_id=job.id, status=job.status)
 
 
@@ -61,20 +93,18 @@ def analyze_text(req: AnalyzeTextRequest, db: Session = Depends(get_db)):
     responses={500: {"description": "분석 작업 생성 실패"}},
     summary="URL 입력 분석 작업 시작",
 )
-def analyze_url(req: AnalyzeUrlRequest, db: Session = Depends(get_db)):
-    job = create_analysis_job(
-        db,
-        input_type="url",
-        input_value=str(req.url),
-        session_key=req.session_key or "",
-    )
+def analyze_url(req: AnalyzeUrlRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     try:
-        start_url_analysis(db, job.id, str(req.url))
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        job = create_analysis_job(
+            db,
+            input_type="url",
+            input_value=str(req.url),
+            session_key=req.session_key or "",
+        )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="URL 분석 중 오류가 발생했습니다.") from exc
+        raise HTTPException(status_code=500, detail="분석 작업 생성 중 오류가 발생했습니다.") from exc
 
+    background_tasks.add_task(_bg_url_analysis, job.id, str(req.url))
     return AnalyzeResponse(job_id=job.id, status=job.status)
 
 
@@ -91,6 +121,7 @@ def analyze_url(req: AnalyzeUrlRequest, db: Session = Depends(get_db)):
 )
 def analyze_file(
     request: Request,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     session_key: str = Form(""),
     service_name: str = Form(""),
@@ -111,22 +142,18 @@ def analyze_file(
     if len(content) == 0:
         raise HTTPException(status_code=400, detail="빈 파일은 업로드할 수 없습니다.")
 
-    job = create_analysis_job(
-        db,
-        input_type="file",
-        input_value=file.filename or "",
-        service_name=resolved_service_name,
-        session_key=resolved_session_key,
-    )
     try:
-        start_file_analysis(db, job.id, content, content_type)
-    except OcrUnavailableError as exc:
-        raise HTTPException(status_code=503, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=422, detail=str(exc)) from exc
+        job = create_analysis_job(
+            db,
+            input_type="file",
+            input_value=file.filename or "",
+            service_name=resolved_service_name,
+            session_key=resolved_session_key,
+        )
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="파일 분석 중 오류가 발생했습니다.") from exc
+        raise HTTPException(status_code=500, detail="분석 작업 생성 중 오류가 발생했습니다.") from exc
 
+    background_tasks.add_task(_bg_file_analysis, job.id, content, content_type)
     return AnalyzeResponse(job_id=job.id, status=job.status)
 
 

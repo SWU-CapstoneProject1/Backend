@@ -1,0 +1,10 @@
+.git
+.claude
+__pycache__
+*.pyc
+*.pyo
+*.db
+.env
+.env.*
+data_collection/data/
+*.log

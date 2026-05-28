@@ -5,12 +5,27 @@ from fastapi.responses import JSONResponse
 
 from app.api.routes import analyze, result, stats, bookmark, report, history, dashboard
 from app.core.config import settings
+from app.core.database import Base, engine
 
 app = FastAPI(
     title="약간동의 API",
     description="AI 기반 불공정 약관 탐지 플랫폼",
     version="0.1.0",
 )
+
+
+@app.on_event("startup")
+def startup_event():
+    from app.models import models  # noqa: F401
+    Base.metadata.create_all(bind=engine)
+
+
+def _cors_headers(request: Request) -> dict:
+    origin = request.headers.get("origin", "*")
+    return {
+        "Access-Control-Allow-Origin": origin,
+        "Access-Control-Allow-Credentials": "false",
+    }
 
 
 @app.exception_handler(RequestValidationError)
@@ -22,6 +37,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     return JSONResponse(
         status_code=422,
         content={"error": "validation_error", "detail": errors, "status_code": 422},
+        headers=_cors_headers(request),
     )
 
 
@@ -30,6 +46,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
         content={"error": "http_error", "detail": exc.detail, "status_code": exc.status_code},
+        headers=_cors_headers(request),
     )
 
 
@@ -38,6 +55,7 @@ async def unhandled_exception_handler(request: Request, exc: Exception):
     return JSONResponse(
         status_code=500,
         content={"error": "internal_server_error", "detail": "서버 내부 오류가 발생했습니다", "status_code": 500},
+        headers=_cors_headers(request),
     )
 
 # CORS 설정

@@ -168,13 +168,44 @@ POST /api/analyze
 | Analysis pipeline | ✅ MVP 구현 완료 |
 | API server | ✅ 구현 완료 |
 | Frontend | ⏳ 미구현 |
-| Model-based classification | 🔜 예정 |
+| Model-based classification | ✅ KoELECTRA optional 연동 |
+
+---
+
+## KoELECTRA / KR-ELECTRA
+
+프로젝트 기본 후보 모델은 `snunlp/KR-ELECTRA-discriminator`입니다.
+한국어 ELECTRA 계열이며 사전학습 corpus에 법률 텍스트가 포함되어 있어 약관 위험도 분류 fine-tuning 후보로 사용합니다.
+
+원본 모델은 사전학습 checkpoint이므로, 실제 위험도 예측에 사용하려면 `LOW`, `MEDIUM`, `HIGH` 라벨로 fine-tuning한 sequence-classification checkpoint가 필요합니다. fine-tuning 전에는 `USE_KOELECTRA_CLASSIFIER=false`로 두면 기존 규칙 기반 분류가 fallback으로 동작합니다.
+
+```env
+USE_KOELECTRA_CLASSIFIER=false
+KOELECTRA_MODEL_NAME_OR_PATH=snunlp/KR-ELECTRA-discriminator
+KOELECTRA_LABEL_MAP=LABEL_0:LOW,LABEL_1:MEDIUM,LABEL_2:HIGH
+```
+
+fine-tuning한 모델을 저장하거나 Hugging Face에 업로드한 뒤에는 `KOELECTRA_MODEL_NAME_OR_PATH`만 해당 경로 또는 모델 ID로 바꾸고 `USE_KOELECTRA_CLASSIFIER=true`로 전환합니다.
+
+데모용으로는 기존 규칙 기반 분류 결과를 pseudo-label로 만들어 KR-ELECTRA를 학습할 수 있습니다. 이 checkpoint는 발표용 연결 검증에는 사용할 수 있지만, 사람이 검수한 정답 라벨로 학습한 모델은 아닙니다.
+
+```bash
+python scripts/train_koelectra_pseudo.py --allow-download --epochs 1 --max-samples-per-label 80
+```
+
+학습 후 `.env` 예시:
+
+```env
+USE_KOELECTRA_CLASSIFIER=true
+KOELECTRA_MODEL_NAME_OR_PATH=models/koelectra-risk-pseudo
+ALLOW_MODEL_DOWNLOAD=false
+```
 
 ---
 
 ## Roadmap
 
-- [ ] KoELECTRA 기반 위험도 분류 모델 적용
+- [x] KoELECTRA 기반 위험도 분류 모델 optional 적용
 - [ ] 약관 도메인 데이터셋 구축
 - [ ] RAG 검색 품질 개선
 - [ ] 프론트엔드 UI 개발

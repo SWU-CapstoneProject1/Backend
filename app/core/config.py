@@ -23,9 +23,18 @@ class Settings(BaseSettings):
     TESSDATA_DIR: str = ""
 
     PRECEDENT_MIN_SIMILARITY: float = 0.2
+    USE_SEMANTIC_RAG: bool = False
+    ALLOW_MODEL_DOWNLOAD: bool = False
+
+    USE_KOELECTRA_CLASSIFIER: bool = False
+    KOELECTRA_MODEL_NAME_OR_PATH: str = "snunlp/KR-ELECTRA-discriminator"
+    KOELECTRA_DEVICE: int = -1
+    KOELECTRA_MAX_LENGTH: int = 256
+    KOELECTRA_MIN_CONFIDENCE: float = 0.5
+    KOELECTRA_LABEL_MAP: str = "LABEL_0:LOW,LABEL_1:MEDIUM,LABEL_2:HIGH"
 
     LAW_API_KEY: str = ""
-    ANTHROPIC_API_KEY: str = ""
+    GEMINI_API_KEY: str = ""
 
     model_config = SettingsConfigDict(
         env_file=".env",

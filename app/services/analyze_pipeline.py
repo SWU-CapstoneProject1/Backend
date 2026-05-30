@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.services.clause_splitter import split_clauses
 from app.services.precedent_retriever import FTCRetriever
 from app.services.llm_explainer import generate_llm_explanation
+from app.services.koelectra_classifier import classify_with_koelectra
 
 
 RISK_RULES = [
@@ -74,7 +75,7 @@ def split_sentences(text: str) -> List[str]:
     return [s.strip() for s in sentences if s.strip()]
 
 
-def classify_clause_risk(clause_text: str) -> Dict:
+def classify_clause_risk_by_rules(clause_text: str) -> Dict:
     sentences = split_sentences(clause_text)
 
     total_score = 0
@@ -103,6 +104,13 @@ def classify_clause_risk(clause_text: str) -> Dict:
         "risk_types": sorted(list(risk_types)),
         "matched_rules": sorted(list(matched_rules)),
     }
+
+
+def classify_clause_risk(clause_text: str) -> Dict:
+    model_result = classify_with_koelectra(clause_text)
+    if model_result is not None:
+        return model_result
+    return classify_clause_risk_by_rules(clause_text)
 
 
 def rerank_cases(clause_text: str, cases: List[Dict]) -> List[Dict]:

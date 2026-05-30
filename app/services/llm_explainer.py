@@ -7,11 +7,11 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 
 
 def _has_valid_api_key() -> bool:
-    key = ANTHROPIC_API_KEY.strip()
+    key = GEMINI_API_KEY.strip()
     if not key:
         return False
     if key.startswith("여기에_") or key.lower() in {"your_api_key", "changeme", "none"}:
@@ -68,32 +68,26 @@ def build_prompt(
 """.strip()
 
 
-def call_claude_json(prompt: str) -> Optional[Dict]:
+def call_gemini_json(prompt: str) -> Optional[Dict]:
     if not _has_valid_api_key():
         return None
 
-    url = "https://api.anthropic.com/v1/messages"
-    headers = {
-        "x-api-key": ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-        "content-type": "application/json",
-    }
+    url = (
+        "https://generativelanguage.googleapis.com/v1beta/models"
+        f"/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+    )
     payload = {
-        "model": "claude-3-5-sonnet-latest",
-        "max_tokens": 800,
-        "temperature": 0.2,
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 800},
     }
 
     try:
         with httpx.Client(timeout=60.0) as client:
-            resp = client.post(url, headers=headers, json=payload)
+            resp = client.post(url, json=payload)
             resp.raise_for_status()
             data = resp.json()
 
-        text = data["content"][0]["text"].strip()
+        text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
         text = text.removeprefix("```json").removesuffix("```").strip()
 
         return json.loads(text)
@@ -107,7 +101,7 @@ def generate_llm_explanation(
     precedent_cases: List[Dict],
 ) -> Dict:
     prompt = build_prompt(clause_text, risk_result, precedent_cases)
-    result = call_claude_json(prompt)
+    result = call_gemini_json(prompt)
 
     if result:
         return result

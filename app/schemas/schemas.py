@@ -51,12 +51,14 @@ class AnalyzeUrlRequest(BaseModel):
     """URL 입력 분석 요청"""
     url: HttpUrl
     session_key: Optional[str] = ""
+    service_name: Optional[str] = ""
 
     class Config:
         json_schema_extra = {
             "example": {
                 "url": "https://example.com/terms",
                 "session_key": "uuid-xxxx",
+                "service_name": "서비스명",
             }
         }
 

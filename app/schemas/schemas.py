@@ -85,6 +85,7 @@ class ClauseOut(BaseModel):
     original: str
     risk_level: RiskLevel
     summary: str = ""
+    precedents: List["PrecedentOut"] = Field(default_factory=list)
 
 
 class PrecedentOut(BaseModel):

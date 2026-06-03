@@ -49,6 +49,17 @@ def _result_from_saved(record: AnalysisResult) -> ResultResponse:
                 original=clause.get("content", ""),
                 risk_level=_schema_risk_level(clause.get("risk_level", "LOW")),
                 summary=clause.get("llm_summary") or clause.get("plain_explanation", ""),
+                precedents=[
+                    PrecedentOut(
+                        case_no=case.get("case_number", ""),
+                        title=case.get("title", ""),
+                        date=case.get("decision_date", ""),
+                        summary=case.get("preview", ""),
+                        source_url="",
+                        similarity=float(case.get("score", 0.0)),
+                    )
+                    for case in clause.get("precedent_cases", [])
+                ],
             )
             for index, clause in enumerate(clauses)
         ],

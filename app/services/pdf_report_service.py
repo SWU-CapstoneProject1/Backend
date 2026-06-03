@@ -25,13 +25,18 @@ MARGIN   = 50
 WIDTH    = 595   # A4
 HEIGHT   = 842   # A4
 LINE_H   = 18    # 기본 줄 간격
-FONT_FILE = Path("C:/Windows/Fonts/malgun.ttf")
-FONT     = "malgun" if FONT_FILE.exists() else "helv"
+_FONT_CANDIDATES = [
+    Path("C:/Windows/Fonts/malgun.ttf"),                              # Windows
+    Path("/usr/share/fonts/truetype/nanum/NanumGothic.ttf"),          # Linux (fonts-nanum)
+    Path("/usr/share/fonts/truetype/nanum/NanumBarunGothic.ttf"),
+]
+FONT_FILE = next((f for f in _FONT_CANDIDATES if f.exists()), None)
+FONT      = "malgun" if FONT_FILE else "helv"
 
 
 def _font_kwargs():
     kwargs = {"fontname": FONT}
-    if FONT_FILE.exists():
+    if FONT_FILE:
         kwargs["fontfile"] = str(FONT_FILE)
     return kwargs
 

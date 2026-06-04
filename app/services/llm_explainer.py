@@ -82,8 +82,9 @@ def call_gemini_json(prompt: str) -> Optional[Dict]:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 2000,
+            "maxOutputTokens": 8192,
         },
+        "thinkingConfig": {"thinkingBudget": 0},
     }
 
     try:

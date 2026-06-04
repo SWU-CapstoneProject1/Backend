@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
 
 
 def _has_valid_api_key() -> bool:
@@ -72,13 +73,18 @@ def call_gemini_json(prompt: str) -> Optional[Dict]:
     if not _has_valid_api_key():
         return None
 
+    model = GEMINI_MODEL.removeprefix("models/")
     url = (
         "https://generativelanguage.googleapis.com/v1beta/models"
-        f"/gemini-1.5-flash:generateContent?key={GEMINI_API_KEY}"
+        f"/{model}:generateContent?key={GEMINI_API_KEY}"
     )
     payload = {
         "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"temperature": 0.2, "maxOutputTokens": 800},
+        "generationConfig": {
+            "temperature": 0.2,
+            "maxOutputTokens": 800,
+            "responseMimeType": "application/json",
+        },
     }
 
     try:
@@ -88,7 +94,8 @@ def call_gemini_json(prompt: str) -> Optional[Dict]:
             data = resp.json()
 
         text = data["candidates"][0]["content"]["parts"][0]["text"].strip()
-        text = text.removeprefix("```json").removesuffix("```").strip()
+        if text.startswith("```"):
+            text = text.removeprefix("```json").removeprefix("```").removesuffix("```").strip()
 
         return json.loads(text)
     except Exception:

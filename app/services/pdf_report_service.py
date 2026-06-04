@@ -72,15 +72,17 @@ class PDFWriter:
 
     def text(self, txt: str, x: int = MARGIN, size: int = 11,
              color=COLOR_BLACK, bold: bool = False):
-        self._new_page_if_needed(size + 6)
-        self.page.insert_text(
-            (x, self.y),
-            txt,
-            fontsize=size,
-            color=color,
-            **_font_kwargs(),
-        )
-        self.y += size + 6
+        lines = txt.replace("\r\n", "\n").split("\n")
+        for line in lines:
+            self._new_page_if_needed(size + 6)
+            self.page.insert_text(
+                (x, self.y),
+                line,
+                fontsize=size,
+                color=color,
+                **_font_kwargs(),
+            )
+            self.y += size + 6
 
     def gap(self, h: int = 10):
         self.y += h
@@ -94,18 +96,22 @@ class PDFWriter:
         self.y += 8
 
     def rect_text(self, txt: str, bg_color, text_color, size: int = 10):
-        """배경색 박스 + 텍스트"""
-        self._new_page_if_needed(size + 14)
-        rect = fitz.Rect(MARGIN, self.y - 2, WIDTH - MARGIN, self.y + size + 8)
+        """배경색 박스 + 텍스트 (줄바꿈 지원)"""
+        lines = txt.replace("\r\n", "\n").split("\n")
+        total_h = (size + 6) * len(lines) + 8
+        self._new_page_if_needed(total_h)
+        rect = fitz.Rect(MARGIN, self.y - 2, WIDTH - MARGIN, self.y + total_h)
         self.page.draw_rect(rect, color=None, fill=bg_color)
-        self.page.insert_text(
-            (MARGIN + 6, self.y + size),
-            txt,
-            fontsize=size,
-            color=text_color,
-            **_font_kwargs(),
-        )
-        self.y += size + 14
+        for line in lines:
+            self.page.insert_text(
+                (MARGIN + 6, self.y + size),
+                line,
+                fontsize=size,
+                color=text_color,
+                **_font_kwargs(),
+            )
+            self.y += size + 6
+        self.y += 8
 
     def badge(self, label: str, color, x: int, y_offset: int = 0) -> int:
         """인라인 뱃지 — x 좌표 반환"""

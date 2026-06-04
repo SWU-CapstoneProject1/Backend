@@ -99,6 +99,7 @@ def analyze_url(req: AnalyzeUrlRequest, background_tasks: BackgroundTasks, db: S
             db,
             input_type="url",
             input_value=str(req.url),
+            service_name=req.service_name or "",
             session_key=req.session_key or "",
         )
     except Exception as exc:

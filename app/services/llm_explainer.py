@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.5-flash").strip()
+GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-1.5-flash").strip()
 
 
 def _has_valid_api_key() -> bool:
@@ -82,8 +82,7 @@ def call_gemini_json(prompt: str) -> Optional[Dict]:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 800,
-            "responseMimeType": "application/json",
+            "maxOutputTokens": 8192,
         },
     }
 

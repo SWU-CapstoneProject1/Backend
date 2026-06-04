@@ -82,8 +82,7 @@ def call_gemini_json(prompt: str) -> Optional[Dict]:
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {
             "temperature": 0.2,
-            "maxOutputTokens": 800,
-            "responseMimeType": "application/json",
+            "maxOutputTokens": 2000,
         },
     }
 

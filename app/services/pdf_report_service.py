@@ -70,20 +70,25 @@ class PDFWriter:
             self.page = self.doc.new_page(width=WIDTH, height=HEIGHT)
             self.y = MARGIN
 
+    def _wrap_lines(self, txt: str, x: int, size: int):
+        max_chars = max(1, int((WIDTH - MARGIN - x) / (size * 0.85)))
+        result = []
+        for para in txt.replace("\r\n", "\n").split("\n"):
+            if not para:
+                result.append("")
+                continue
+            while len(para) > max_chars:
+                result.append(para[:max_chars])
+                para = para[max_chars:]
+            result.append(para)
+        return result
+
     def text(self, txt: str, x: int = MARGIN, size: int = 11,
              color=COLOR_BLACK, bold: bool = False):
-        txt = txt.replace("\r\n", "\n")
-        self._new_page_if_needed(size + 6)
-        rect = fitz.Rect(x, self.y, WIDTH - MARGIN, self.y + 400)
-        remaining = self.page.insert_textbox(
-            rect, txt,
-            fontsize=size,
-            color=color,
-            align=0,
-            **_font_kwargs(),
-        )
-        used_height = 400 - remaining if remaining >= 0 else 400
-        self.y += max(used_height, size + 6) + 2
+        for line in self._wrap_lines(txt, x, size):
+            self._new_page_if_needed(size + 6)
+            self.page.insert_text((x, self.y), line, fontsize=size, color=color, **_font_kwargs())
+            self.y += size + 6
 
     def gap(self, h: int = 10):
         self.y += h
@@ -98,19 +103,15 @@ class PDFWriter:
 
     def rect_text(self, txt: str, bg_color, text_color, size: int = 10):
         """배경색 박스 + 텍스트 (자동 줄바꿈)"""
-        txt = txt.replace("\r\n", "\n")
-        self._new_page_if_needed(size + 20)
-        # 높이 계산용 임시 rect (화면 밖)
-        tmp_rect = fitz.Rect(MARGIN + 6, self.y, WIDTH - MARGIN - 6, self.y + 2000)
-        remaining = self.page.insert_textbox(tmp_rect, txt, fontsize=size, color=(1,1,1), align=0, **_font_kwargs())
-        total_h = max(2000 - remaining if remaining >= 0 else 2000, size + 6) + 12
-        # 배경 박스
-        bg_rect = fitz.Rect(MARGIN, self.y - 2, WIDTH - MARGIN, self.y + total_h)
-        self.page.draw_rect(bg_rect, color=None, fill=bg_color)
-        # 텍스트 (실제)
-        text_rect = fitz.Rect(MARGIN + 6, self.y + 2, WIDTH - MARGIN - 6, self.y + total_h)
-        self.page.insert_textbox(text_rect, txt, fontsize=size, color=text_color, align=0, **_font_kwargs())
-        self.y += total_h + 4
+        lines = self._wrap_lines(txt, MARGIN + 6, size)
+        total_h = (size + 6) * len(lines) + 8
+        self._new_page_if_needed(total_h)
+        rect = fitz.Rect(MARGIN, self.y - 2, WIDTH - MARGIN, self.y + total_h)
+        self.page.draw_rect(rect, color=None, fill=bg_color)
+        for line in lines:
+            self.page.insert_text((MARGIN + 6, self.y + size), line, fontsize=size, color=text_color, **_font_kwargs())
+            self.y += size + 6
+        self.y += 8
 
     def badge(self, label: str, color, x: int, y_offset: int = 0) -> int:
         """인라인 뱃지 — x 좌표 반환"""

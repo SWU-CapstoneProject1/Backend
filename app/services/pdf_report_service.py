@@ -74,15 +74,16 @@ class PDFWriter:
              color=COLOR_BLACK, bold: bool = False):
         txt = txt.replace("\r\n", "\n")
         self._new_page_if_needed(size + 6)
-        rect = fitz.Rect(x, self.y - size, WIDTH - MARGIN, self.y + 500)
-        used = self.page.insert_textbox(
+        rect = fitz.Rect(x, self.y, WIDTH - MARGIN, self.y + 400)
+        remaining = self.page.insert_textbox(
             rect, txt,
             fontsize=size,
             color=color,
             align=0,
             **_font_kwargs(),
         )
-        self.y += max(abs(used), size + 6) + 2
+        used_height = 400 - remaining if remaining >= 0 else 400
+        self.y += max(used_height, size + 6) + 2
 
     def gap(self, h: int = 10):
         self.y += h
@@ -99,14 +100,14 @@ class PDFWriter:
         """배경색 박스 + 텍스트 (자동 줄바꿈)"""
         txt = txt.replace("\r\n", "\n")
         self._new_page_if_needed(size + 20)
-        # 임시 rect로 높이 계산
+        # 높이 계산용 임시 rect (화면 밖)
         tmp_rect = fitz.Rect(MARGIN + 6, self.y, WIDTH - MARGIN - 6, self.y + 2000)
-        used = self.page.insert_textbox(tmp_rect, txt, fontsize=size, color=text_color, align=0, **_font_kwargs())
-        total_h = max(abs(used), size + 6) + 12
+        remaining = self.page.insert_textbox(tmp_rect, txt, fontsize=size, color=(1,1,1), align=0, **_font_kwargs())
+        total_h = max(2000 - remaining if remaining >= 0 else 2000, size + 6) + 12
         # 배경 박스
         bg_rect = fitz.Rect(MARGIN, self.y - 2, WIDTH - MARGIN, self.y + total_h)
         self.page.draw_rect(bg_rect, color=None, fill=bg_color)
-        # 텍스트
+        # 텍스트 (실제)
         text_rect = fitz.Rect(MARGIN + 6, self.y + 2, WIDTH - MARGIN - 6, self.y + total_h)
         self.page.insert_textbox(text_rect, txt, fontsize=size, color=text_color, align=0, **_font_kwargs())
         self.y += total_h + 4

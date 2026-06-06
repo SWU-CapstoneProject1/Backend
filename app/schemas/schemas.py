@@ -125,6 +125,18 @@ class StatsResponse(BaseModel):
 # 보관함
 # ────────────────────────────────────────────────
 
+class AnalysisProgressResponse(BaseModel):
+    job_id: str
+    status: JobStatus
+    progress_percent: int
+    stage: str
+    message: str = ""
+    current_clause: int = 0
+    total_clauses: int = 0
+    current_clause_title: str = ""
+    current_clause_preview: str = ""
+
+
 class BookmarkRequest(BaseModel):
     job_id: str
     session_key: str

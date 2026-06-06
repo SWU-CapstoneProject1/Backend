@@ -1,9 +1,8 @@
 import re
-from typing import Dict, List
+from typing import Callable, Dict, List
 
 from app.core.config import settings
 from app.services.clause_splitter import split_clauses
-from app.services.precedent_retriever import FTCRetriever
 from app.services.llm_explainer import generate_llm_explanation
 from app.services.koelectra_classifier import classify_with_koelectra
 
@@ -152,18 +151,89 @@ def filter_cases_by_similarity(cases: List[Dict], min_similarity: float | None =
     return filtered
 
 
-def analyze_terms_text(terms_text: str) -> Dict:
-    retriever = FTCRetriever()
+def _get_retriever():
+    from app.services.precedent_retriever import FTCRetriever
+
+    return FTCRetriever()
+
+
+def _notify_progress(progress_callback: Callable[..., None] | None, **payload) -> None:
+    if progress_callback is not None:
+        progress_callback(**payload)
+
+
+def _clause_preview(text: str, limit: int = 140) -> str:
+    normalized = re.sub(r"\s+", " ", text).strip()
+    if len(normalized) <= limit:
+        return normalized
+    return f"{normalized[:limit].rstrip()}..."
+
+
+def _clause_percent(index: int, total: int, step_ratio: float) -> int:
+    if total <= 0:
+        return 15
+    per_clause = 75 / total
+    return min(90, int(15 + (index - 1) * per_clause + per_clause * step_ratio))
+
+
+def analyze_terms_text(terms_text: str, progress_callback: Callable[..., None] | None = None) -> Dict:
+    _notify_progress(
+        progress_callback,
+        progress_percent=5,
+        stage="preparing",
+        message="분석 모델과 판례 데이터를 준비하고 있습니다.",
+    )
+    retriever = _get_retriever()
+    _notify_progress(
+        progress_callback,
+        progress_percent=10,
+        stage="splitting",
+        message="약관 조항을 분리하고 있습니다.",
+    )
     clauses = split_clauses(terms_text)
+    total = len(clauses)
+    _notify_progress(
+        progress_callback,
+        progress_percent=15,
+        stage="clauses_ready",
+        message=f"총 {total}개 조항을 찾았습니다.",
+        current_clause=0,
+        total_clauses=total,
+        current_clause_title="",
+        current_clause_preview="",
+    )
 
     analyzed = []
     stats = {"HIGH": 0, "MEDIUM": 0, "LOW": 0}
 
-    for clause in clauses:
+    for index, clause in enumerate(clauses, start=1):
         text = clause["content"]
+        title = clause.get("title", "")
+        preview = _clause_preview(text)
+
+        _notify_progress(
+            progress_callback,
+            progress_percent=_clause_percent(index, total, 0.0),
+            stage="classifying",
+            message=f"{index}/{total}번 조항의 위험도를 분류하고 있습니다.",
+            current_clause=index,
+            total_clauses=total,
+            current_clause_title=title,
+            current_clause_preview=preview,
+        )
         risk = classify_clause_risk(text)
         stats[risk["risk_level"]] += 1
 
+        _notify_progress(
+            progress_callback,
+            progress_percent=_clause_percent(index, total, 0.35),
+            stage="retrieving_precedents",
+            message=f"{index}/{total}번 조항과 관련된 판례를 찾고 있습니다.",
+            current_clause=index,
+            total_clauses=total,
+            current_clause_title=title,
+            current_clause_preview=preview,
+        )
         if risk["risk_level"] == "LOW":
             retrieved = retriever.search(text, top_k=3)
         else:
@@ -171,6 +241,16 @@ def analyze_terms_text(terms_text: str) -> Dict:
 
         reranked = filter_cases_by_similarity(rerank_cases(text, retrieved))
 
+        _notify_progress(
+            progress_callback,
+            progress_percent=_clause_percent(index, total, 0.65),
+            stage="generating_explanation",
+            message=f"{index}/{total}번 조항의 AI 설명을 생성하고 있습니다.",
+            current_clause=index,
+            total_clauses=total,
+            current_clause_title=title,
+            current_clause_preview=preview,
+        )
         llm_result = generate_llm_explanation(
             clause_text=text,
             risk_result=risk,
@@ -203,8 +283,27 @@ def analyze_terms_text(terms_text: str) -> Dict:
                 for c in reranked
             ],
         })
+        _notify_progress(
+            progress_callback,
+            progress_percent=_clause_percent(index, total, 1.0),
+            stage="clause_completed",
+            message=f"{index}/{total}번 조항 분석을 완료했습니다.",
+            current_clause=index,
+            total_clauses=total,
+            current_clause_title=title,
+            current_clause_preview=preview,
+        )
 
-    total = len(clauses)
+    _notify_progress(
+        progress_callback,
+        progress_percent=92,
+        stage="summarizing",
+        message="전체 위험도 요약을 계산하고 있습니다.",
+        current_clause=total,
+        total_clauses=total,
+        current_clause_title="",
+        current_clause_preview="",
+    )
     # 가중치 방식: 위험×3 + 주의×1 / 전체×3 × 100
     weighted = stats["HIGH"] * 3 + stats["MEDIUM"] * 1
     risk_score = round(weighted / (total * 3) * 100, 1) if total > 0 else 0.0

@@ -70,17 +70,36 @@ class PDFWriter:
             self.page = self.doc.new_page(width=WIDTH, height=HEIGHT)
             self.y = MARGIN
 
+    def _char_width(self, ch: str, size: int) -> float:
+        cp = ord(ch)
+        if 0xAC00 <= cp <= 0xD7A3 or 0x1100 <= cp <= 0x11FF or 0x3130 <= cp <= 0x318F:
+            return size * 0.65  # 한글
+        elif cp > 0x2E80:
+            return size * 0.65  # 기타 CJK
+        else:
+            return size * 0.45  # ASCII/Latin
+
     def _wrap_lines(self, txt: str, x: int, size: int):
-        max_chars = max(1, int((WIDTH - MARGIN - x) / (size * 0.85)))
+        max_width = WIDTH - MARGIN - x
         result = []
         for para in txt.replace("\r\n", "\n").split("\n"):
             if not para:
                 result.append("")
                 continue
-            while len(para) > max_chars:
-                result.append(para[:max_chars])
-                para = para[max_chars:]
-            result.append(para)
+            current = ""
+            current_w = 0.0
+            for ch in para:
+                cw = self._char_width(ch, size)
+                if current_w + cw > max_width:
+                    if current:
+                        result.append(current)
+                    current = ch
+                    current_w = cw
+                else:
+                    current += ch
+                    current_w += cw
+            if current:
+                result.append(current)
         return result
 
     def text(self, txt: str, x: int = MARGIN, size: int = 11,
@@ -115,7 +134,7 @@ class PDFWriter:
 
     def badge(self, label: str, color, x: int, y_offset: int = 0) -> int:
         """인라인 뱃지 — x 좌표 반환"""
-        w = len(label) * 7 + 10
+        w = sum(self._char_width(ch, 9) for ch in label) + 10
         rect = fitz.Rect(x, self.y - 12 + y_offset, x + w, self.y + 2 + y_offset)
         self.page.draw_rect(rect, color=None, fill=color)
         self.page.insert_text(
@@ -128,71 +147,84 @@ class PDFWriter:
         return x + w + 6
 
 
+def _insert(w: "PDFWriter", x: float, text: str, size: int, color):
+    w._new_page_if_needed(size + 8)
+    w.page.insert_text((x, w.y), text, fontsize=size, color=color, **_font_kwargs())
+    w.y += size + 7
+
+
+def _hline(w: "PDFWriter", color=COLOR_GRAY, lw: float = 0.5, gap_after: int = 16):
+    w._new_page_if_needed(gap_after + 4)
+    w.page.draw_line((MARGIN, w.y), (WIDTH - MARGIN, w.y), color=color, width=lw)
+    w.y += gap_after
+
+
 def generate_pdf_report(result: ResultResponse) -> bytes:
     """ResultResponse를 받아 PDF 바이트 반환"""
     doc = fitz.open()
     w = PDFWriter(doc)
 
-    # ── 헤더 ────────────────────────────────────────────────────
-    w.text("약간동의 분석 리포트", size=20, color=(0.15, 0.35, 0.75))
-    w.gap(4)
+    # ── 헤더 ─────────────────────────────────────────────────────
+    _insert(w, MARGIN, "약간동의 분석 리포트", 20, (0.15, 0.35, 0.75))
+    w.y += 4
 
     service = result.service_name or "미입력"
     now = datetime.now().strftime("%Y년 %m월 %d일 %H:%M")
-    w.text(f"서비스명: {service}    분석 일시: {now}", size=10, color=COLOR_GRAY)
-    w.gap(6)
-    w.line(color=(0.15, 0.35, 0.75), width=1.5)
+    _insert(w, MARGIN, f"서비스명: {service}    분석 일시: {now}", 10, COLOR_GRAY)
+    w.y += 6
+    _hline(w, color=(0.15, 0.35, 0.75), lw=1.5, gap_after=18)
 
-    # ── 위험도 요약 ──────────────────────────────────────────────
+    # ── 종합 위험도 ───────────────────────────────────────────────
     score = result.risk_score or 0.0
     grade = _risk_grade(score)
     grade_color = COLOR_RED if grade == "위험" else (COLOR_ORANGE if grade == "주의" else COLOR_GREEN)
 
-    w.text("종합 위험도", size=13, color=COLOR_BLACK)
-    w.gap(2)
-    w.text(f"점수: {score:.1f}점    등급: {grade}", size=12, color=grade_color)
-    w.gap(4)
-    w.text(
-        f"위험 {result.danger_count}건  |  주의 {result.caution_count}건  |  안전 {result.safe_count}건",
-        size=10, color=COLOR_GRAY,
-    )
-    w.gap(8)
-    w.line()
+    _insert(w, MARGIN, "종합 위험도", 13, COLOR_BLACK)
+    w.y += 2
+    _insert(w, MARGIN, f"점수: {score:.1f}점    등급: {grade}", 12, grade_color)
+    w.y += 2
+    _insert(w, MARGIN,
+            f"위험 {result.danger_count}건  |  주의 {result.caution_count}건  |  안전 {result.safe_count}건",
+            10, COLOR_GRAY)
+    w.y += 8
+    _hline(w, gap_after=18)
 
-    # ── 조항별 분석 ──────────────────────────────────────────────
-    w.text("조항별 분석 결과", size=13, color=COLOR_BLACK)
-    w.gap(6)
+    # ── 조항별 분석 ───────────────────────────────────────────────
+    _insert(w, MARGIN, "조항별 분석 결과", 13, COLOR_BLACK)
+    w.y += 8
 
     for clause in result.clauses:
         text_color, bg_color, label = _risk_color(clause.risk_level)
 
-        # 조항 번호 + 뱃지
-        w._new_page_if_needed(80)
+        w._new_page_if_needed(120)
+
+        # 조항 번호 + 뱃지 (한 줄에)
         header = f"조항 {clause.index + 1}"
-        w.text(header, size=11, color=COLOR_BLACK)
-        # 뱃지 (같은 줄에 그리기 위해 y를 되돌림)
-        badge_y = w.y - (11 + 6)
-        badge_x = MARGIN + len(header) * 8 + 4
-        rect = fitz.Rect(badge_x, badge_y - 2, badge_x + 36, badge_y + 12)
-        w.page.draw_rect(rect, color=None, fill=text_color)
-        w.page.insert_text((badge_x + 4, badge_y + 9), label, fontsize=9, color=(1, 1, 1), **_font_kwargs())
+        w.page.insert_text((MARGIN, w.y), header, fontsize=11, color=COLOR_BLACK, **_font_kwargs())
+        hdr_w = sum(w._char_width(ch, 11) for ch in header)
+        bx = MARGIN + hdr_w + 10
+        bw = sum(w._char_width(ch, 9) for ch in label) + 12
+        w.page.draw_rect(fitz.Rect(bx, w.y - 10, bx + bw, w.y + 3), color=None, fill=text_color)
+        w.page.insert_text((bx + 4, w.y), label, fontsize=9, color=(1, 1, 1), **_font_kwargs())
+        w.y += 18
 
         # 원문 (배경색 박스)
         original = clause.original[:200] + ("..." if len(clause.original) > 200 else "")
         w.rect_text(original, bg_color, text_color, size=9)
 
-        # 요약
+        # 요약 (박스 완전히 벗어난 아래)
         if clause.summary:
             summary = clause.summary[:150] + ("..." if len(clause.summary) > 150 else "")
-            w.text(f"요약: {summary}", size=9, color=COLOR_GRAY, x=MARGIN + 10)
+            w.y += 14
+            _insert(w, MARGIN + 6, f"요약: {summary}", 9, COLOR_GRAY)
 
-        w.gap(10)
-        w.line(color=(0.85, 0.85, 0.85), width=0.3)
+        w.y += 10
+        _hline(w, color=(0.85, 0.85, 0.85), lw=0.3, gap_after=14)
 
-    # ── 푸터 ─────────────────────────────────────────────────────
-    w.gap(16)
-    w.text("본 리포트는 AI 기반 자동 분석 결과로, 법적 효력이 없습니다.", size=8, color=COLOR_GRAY)
-    w.text("약간동의 | yakgandongui.com", size=8, color=COLOR_GRAY)
+    # ── 푸터 ──────────────────────────────────────────────────────
+    w.y += 10
+    _insert(w, MARGIN, "본 리포트는 AI 기반 자동 분석 결과로, 법적 효력이 없습니다.", 8, COLOR_GRAY)
+    _insert(w, MARGIN, "약간동의 | yakgandongui.com", 8, COLOR_GRAY)
 
     buf = io.BytesIO()
     doc.save(buf)

@@ -73,14 +73,14 @@ class PDFWriter:
     def _char_width(self, ch: str, size: int) -> float:
         cp = ord(ch)
         if 0xAC00 <= cp <= 0xD7A3 or 0x1100 <= cp <= 0x11FF or 0x3130 <= cp <= 0x318F:
-            return size * 0.65  # 한글
+            return size * 0.87  # 한글
         elif cp > 0x2E80:
-            return size * 0.65  # 기타 CJK
+            return size * 0.87  # 기타 CJK
         else:
-            return size * 0.45  # ASCII/Latin
+            return size * 0.52  # ASCII/Latin
 
     def _wrap_lines(self, txt: str, x: int, size: int):
-        max_width = WIDTH - MARGIN - x
+        max_width = WIDTH - MARGIN - x - 6
         result = []
         for para in txt.replace("\r\n", "\n").split("\n"):
             if not para:
@@ -122,15 +122,15 @@ class PDFWriter:
 
     def rect_text(self, txt: str, bg_color, text_color, size: int = 10):
         """배경색 박스 + 텍스트 (자동 줄바꿈)"""
-        lines = self._wrap_lines(txt, MARGIN + 6, size)
-        total_h = (size + 6) * len(lines) + 8
+        lines = self._wrap_lines(txt, MARGIN + 10, size)
+        total_h = (size + 6) * len(lines) + 10
         self._new_page_if_needed(total_h)
         rect = fitz.Rect(MARGIN, self.y - 2, WIDTH - MARGIN, self.y + total_h)
         self.page.draw_rect(rect, color=None, fill=bg_color)
         for line in lines:
-            self.page.insert_text((MARGIN + 6, self.y + size), line, fontsize=size, color=text_color, **_font_kwargs())
+            self.page.insert_text((MARGIN + 10, self.y + size), line, fontsize=size, color=text_color, **_font_kwargs())
             self.y += size + 6
-        self.y += 8
+        self.y += 10
 
     def badge(self, label: str, color, x: int, y_offset: int = 0) -> int:
         """인라인 뱃지 — x 좌표 반환"""
@@ -148,9 +148,7 @@ class PDFWriter:
 
 
 def _insert(w: "PDFWriter", x: float, text: str, size: int, color):
-    w._new_page_if_needed(size + 8)
-    w.page.insert_text((x, w.y), text, fontsize=size, color=color, **_font_kwargs())
-    w.y += size + 7
+    w.text(text, x=int(x), size=size, color=color)
 
 
 def _hline(w: "PDFWriter", color=COLOR_GRAY, lw: float = 0.5, gap_after: int = 16):

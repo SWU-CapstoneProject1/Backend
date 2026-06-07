@@ -8,6 +8,7 @@ from app.schemas.schemas import (
     AnalyzeResponse,
     AnalyzeTextRequest,
     AnalyzeUrlRequest,
+    AnalysisProgressResponse,
     TermsAnalyzeRequest,
     TermsAnalyzeResponse,
 )
@@ -19,6 +20,7 @@ from app.services.analyze_service import (
     start_url_analysis,
 )
 from app.services.file_extractor import OcrUnavailableError, SUPPORTED_IMAGE_CONTENT_TYPES
+from app.services.progress_service import get_analysis_progress
 
 router = APIRouter(prefix="/analyze")
 
@@ -156,6 +158,19 @@ def analyze_file(
 
     background_tasks.add_task(_bg_file_analysis, job.id, content, content_type)
     return AnalyzeResponse(job_id=job.id, status=job.status)
+
+
+@router.get(
+    "/{job_id}/progress",
+    response_model=AnalysisProgressResponse,
+    responses={404: {"description": "분석 작업 없음"}},
+    summary="분석 진행률 조회",
+)
+def get_analysis_progress_status(job_id: str, db: Session = Depends(get_db)):
+    progress = get_analysis_progress(db, job_id)
+    if progress is None:
+        raise HTTPException(status_code=404, detail="분석 작업을 찾을 수 없습니다.")
+    return progress
 
 
 @router.post(

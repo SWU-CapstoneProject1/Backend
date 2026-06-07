@@ -78,6 +78,21 @@ class ServiceStats(Base):
     updated_at      = Column(DateTime, server_default=func.now())
 
 
+class AnalysisProgress(Base):
+    """Analysis progress by job_id."""
+    __tablename__ = "analysis_progress"
+
+    job_id                 = Column(String, primary_key=True, index=True)
+    progress_percent       = Column(Integer, default=0)
+    stage                  = Column(String, default="queued")
+    message                = Column(Text, default="")
+    current_clause         = Column(Integer, default=0)
+    total_clauses          = Column(Integer, default=0)
+    current_clause_title   = Column(String, default="")
+    current_clause_preview = Column(Text, default="")
+    updated_at             = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+
 class Bookmark(Base):
     """사용자 보관함 테이블"""
     __tablename__ = "bookmarks"

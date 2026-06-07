@@ -1,6 +1,6 @@
 from sqlalchemy.orm import Session
 
-from app.models.models import AnalysisJob, Clause, JobStatus, RiskLevel
+from app.models.models import AnalysisJob, AnalysisProgress, Clause, JobStatus, RiskLevel
 
 
 def _to_db_risk_level(level: str) -> RiskLevel:
@@ -27,6 +27,13 @@ def create_analysis_job(
         status=JobStatus.pending,
     )
     db.add(job)
+    db.flush()
+    db.add(AnalysisProgress(
+        job_id=job.id,
+        progress_percent=0,
+        stage="queued",
+        message="분석 대기 중입니다.",
+    ))
     db.commit()
     db.refresh(job)
     return job
@@ -36,6 +43,7 @@ def start_text_analysis(db: Session, job_id: str, text: str):
     """텍스트 분석 실행 후 DB에 결과 저장"""
     from app.services.analyze_pipeline import analyze_terms_text
     from app.services.history_service import save_analysis_result
+    from app.services.progress_service import mark_analysis_failed, update_analysis_progress
 
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
@@ -43,15 +51,35 @@ def start_text_analysis(db: Session, job_id: str, text: str):
 
     job.status = JobStatus.running
     db.commit()
+    update_analysis_progress(
+        db,
+        job_id,
+        progress_percent=5,
+        stage="preparing",
+        message="분석 모델과 판례 데이터를 준비하고 있습니다.",
+    )
 
     try:
-        result = analyze_terms_text(text)
+        result = analyze_terms_text(
+            text,
+            progress_callback=lambda **payload: update_analysis_progress(db, job_id, **payload),
+        )
     except Exception:
-        job.status = JobStatus.failed
-        db.commit()
+        db.rollback()
+        job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+        if job is not None:
+            job.status = JobStatus.failed
+        mark_analysis_failed(db, job_id)
         raise
 
     summary = result["summary"]
+    update_analysis_progress(
+        db,
+        job_id,
+        progress_percent=95,
+        stage="saving",
+        message="분석 결과를 저장하고 있습니다.",
+    )
 
     db.query(Clause).filter(Clause.job_id == job_id).delete()
     for i, clause in enumerate(result.get("clauses", [])):
@@ -77,21 +105,45 @@ def start_text_analysis(db: Session, job_id: str, text: str):
         session_key=job.session_key or "",
         job_id=job_id,
     )
+    update_analysis_progress(
+        db,
+        job_id,
+        progress_percent=100,
+        stage="completed",
+        message="분석이 완료되었습니다.",
+        current_clause=summary.get("total_clauses", 0),
+        total_clauses=summary.get("total_clauses", 0),
+        current_clause_title="",
+        current_clause_preview="",
+    )
 
 
 def start_url_analysis(db: Session, job_id: str, url: str):
     """URL 크롤링 후 약관 텍스트 추출 → 분석"""
     from app.services.url_extractor import extract_text_from_url
+    from app.services.progress_service import mark_analysis_failed, update_analysis_progress
 
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
         raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
     try:
+        job.status = JobStatus.running
+        db.commit()
+        update_analysis_progress(
+            db,
+            job_id,
+            progress_percent=5,
+            stage="extracting_url",
+            message="URL에서 약관 본문을 가져오고 있습니다.",
+        )
         text = extract_text_from_url(url)
     except ValueError as e:
-        job.status = JobStatus.failed
-        db.commit()
+        db.rollback()
+        job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+        if job is not None:
+            job.status = JobStatus.failed
+        mark_analysis_failed(db, job_id)
         raise e
 
     start_text_analysis(db, job_id, text)
@@ -100,16 +152,29 @@ def start_url_analysis(db: Session, job_id: str, url: str):
 def start_file_analysis(db: Session, job_id: str, content: bytes, content_type: str):
     """파일에서 약관 텍스트 추출 → 분석 (PDF 지원, 이미지 미지원)"""
     from app.services.file_extractor import extract_text_from_file
+    from app.services.progress_service import mark_analysis_failed, update_analysis_progress
 
     job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
     if not job:
         raise ValueError(f"job_id {job_id}에 해당하는 분석 작업이 없습니다")
 
     try:
+        job.status = JobStatus.running
+        db.commit()
+        update_analysis_progress(
+            db,
+            job_id,
+            progress_percent=5,
+            stage="extracting_file",
+            message="파일에서 약관 텍스트를 추출하고 있습니다.",
+        )
         text = extract_text_from_file(content, content_type)
     except Exception as e:
-        job.status = JobStatus.failed
-        db.commit()
+        db.rollback()
+        job = db.query(AnalysisJob).filter(AnalysisJob.id == job_id).first()
+        if job is not None:
+            job.status = JobStatus.failed
+        mark_analysis_failed(db, job_id)
         raise e
 
     start_text_analysis(db, job_id, text)

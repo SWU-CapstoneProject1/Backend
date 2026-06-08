@@ -13,6 +13,9 @@ def _clamp_percent(value: int | None) -> int:
 
 def _schema_status(status) -> SchemaJobStatus:
     raw_status = status.value if hasattr(status, "value") else str(status)
+    # DB에 "running"으로 저장된 값을 "processing"으로 매핑
+    if raw_status == "running":
+        raw_status = "processing"
     return SchemaJobStatus(raw_status)
 
 

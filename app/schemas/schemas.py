@@ -22,7 +22,7 @@ class RiskLevel(str, Enum):
 
 class JobStatus(str, Enum):
     pending = "pending"
-    running = "running"
+    running = "processing"   # 프론트 기대값: 'processing'
     done = "done"
     failed = "failed"
 

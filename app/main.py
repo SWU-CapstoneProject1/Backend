@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.api.routes import analyze, result, stats, bookmark, report, history, dashboard
+from app.api.routes import settings as settings_router
 from app.core.config import settings
 from app.core.database import Base, engine
 
@@ -17,6 +18,7 @@ app = FastAPI(
 @app.on_event("startup")
 def startup_event():
     from app.models import models  # noqa: F401
+    from app.models import settings as settings_model  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
 
@@ -75,6 +77,7 @@ app.include_router(bookmark.router, prefix="/api", tags=["보관함"])
 app.include_router(report.router, prefix="/api", tags=["리포트"])
 app.include_router(history.router, prefix="/api", tags=["보관함"])
 app.include_router(dashboard.router, prefix="/api", tags=["대시보드"])
+app.include_router(settings_router.router, prefix="/api", tags=["설정"])
 
 
 @app.get("/")

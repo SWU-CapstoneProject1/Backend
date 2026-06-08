@@ -10,9 +10,7 @@ from app.schemas.schemas import (
     AnalyzeUrlRequest,
     AnalysisProgressResponse,
     TermsAnalyzeRequest,
-    TermsAnalyzeResponse,
 )
-from app.services.analyze_pipeline import analyze_terms_text
 from app.services.analyze_service import (
     create_analysis_job,
     start_file_analysis,
@@ -175,13 +173,12 @@ def get_analysis_progress_status(job_id: str, db: Session = Depends(get_db)):
 
 @router.post(
     "",
-    response_model=TermsAnalyzeResponse,
-    responses={400: {"description": "입력값 오류"}, 500: {"description": "분석 실패"}},
-    summary="약관 텍스트 즉시 분석",
+    response_model=AnalyzeResponse,
+    responses={400: {"description": "입력값 오류"}, 500: {"description": "분석 작업 생성 실패"}},
+    summary="약관 텍스트 비동기 분석 작업 시작",
 )
-def analyze_terms(request: TermsAnalyzeRequest, db: Session = Depends(get_db)):
+def analyze_terms(request: TermsAnalyzeRequest, background_tasks: BackgroundTasks, db: Session = Depends(get_db)):
     from app.core.config import settings
-    from app.services.history_service import save_analysis_result
 
     text = request.text.strip()
     if not text:
@@ -190,23 +187,18 @@ def analyze_terms(request: TermsAnalyzeRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail=f"최소 {settings.MIN_TEXT_LENGTH}자 이상 입력해주세요.")
 
     try:
-        result = analyze_terms_text(text)
-        record = save_analysis_result(
+        job = create_analysis_job(
             db,
-            result,
-            service_name=request.service_name or "직접 입력",
+            input_type="text",
+            input_value=text,
+            service_name=request.service_name or "",
             session_key=request.session_key or "",
         )
-    except FileNotFoundError as exc:
-        raise HTTPException(
-            status_code=500,
-            detail="분석에 필요한 데이터 파일이 없습니다. 서버 설정을 확인해주세요.",
-        ) from exc
     except Exception as exc:
-        raise HTTPException(status_code=500, detail="분석 중 오류가 발생했습니다. 잠시 후 다시 시도해주세요.") from exc
+        raise HTTPException(status_code=500, detail="분석 작업 생성 중 오류가 발생했습니다.") from exc
 
-    result["job_id"] = record.id
-    return result
+    background_tasks.add_task(_bg_text_analysis, job.id, text)
+    return AnalyzeResponse(job_id=job.id, status=job.status)
 
 
 def _resolve_content_type(file: UploadFile) -> str:

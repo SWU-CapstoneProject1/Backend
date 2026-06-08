@@ -14,6 +14,13 @@ def _schema_risk_level(level: str) -> RiskLevel:
     return RiskLevel.safe
 
 
+def _schema_job_status(status) -> JobStatus:
+    raw = status.value if hasattr(status, "value") else str(status)
+    if raw == "running":
+        raw = "processing"
+    return JobStatus(raw)
+
+
 def _result_from_saved(record: AnalysisResult) -> ResultResponse:
     data = json.loads(record.result_json or "{}")
     summary = data.get("summary", {})
@@ -85,7 +92,7 @@ def get_result(db: Session, job_id: str) -> ResultResponse | None:
 
     return ResultResponse(
         job_id=job.id,
-        status=JobStatus(job.status),
+        status=_schema_job_status(job.status),
         service_name=job.service_name or "",
         risk_score=job.risk_score or 0.0,
         danger_count=job.danger_count or 0,
